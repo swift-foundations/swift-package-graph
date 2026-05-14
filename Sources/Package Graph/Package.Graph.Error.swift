@@ -15,17 +15,6 @@ extension Package.Graph {
         public let kind: Kind
         public let detail: Swift.String
 
-        public enum Kind: Swift.Sendable, Swift.Hashable {
-            /// Graph construction failed (e.g., a manifest
-            /// references a dependency the workspace doesn't
-            /// contain).
-            case constructionFailed
-
-            /// Topological order requested but the graph contains
-            /// cycles. Call ``Package/Graph/cycles()`` to enumerate them.
-            case cycleDetected
-        }
-
         public init(kind: Kind, detail: Swift.String = "") {
             self.kind = kind
             self.detail = detail
