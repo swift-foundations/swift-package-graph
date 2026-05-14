@@ -27,12 +27,19 @@ let package = Package(
         .executable(name: "package-graph", targets: ["Package Graph CLI"])
     ],
     dependencies: [
-        // v0.1: minimum deps for the type model + reverse-dep graph queries.
-        // Process / file-system / json / async / console / time-primitives /
-        // path-primitives added back when Package.Workspace.discover and the
-        // load pipeline land in v0.2.
+        // v0.2: discover pipeline restores swift-process (subprocess spawn for
+        // `swift package dump-package`) and swift-file-system (workspace walk).
+        // JSON decoding goes through Foundation's `JSONDecoder` consuming the
+        // `Codable` conformance landed in swift-spm-standard Phase 3a — the
+        // ecosystem's swift-json deliberately does not bridge Codable, so the
+        // pragmatic fit is Foundation here at L3.
+        // swift-async / swift-path-primitives / swift-time-primitives skipped
+        // for v0.2 — `TaskGroup` covers concurrency, `Swift.String` covers path
+        // joining, no timeouts in discover.
         .package(path: "../../swift-primitives/swift-graph-primitives"),
-        .package(path: "../../swift-standards/swift-spm-standard")
+        .package(path: "../../swift-standards/swift-spm-standard"),
+        .package(path: "../swift-process"),
+        .package(path: "../swift-file-system")
     ],
     targets: [
         .target(
@@ -41,7 +48,9 @@ let package = Package(
                 .product(name: "Graph Primitives Core", package: "swift-graph-primitives"),
                 .product(name: "Graph Topological Primitives", package: "swift-graph-primitives"),
                 .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
-                .product(name: "SPM Standard", package: "swift-spm-standard")
+                .product(name: "SPM Standard", package: "swift-spm-standard"),
+                .product(name: "Process", package: "swift-process"),
+                .product(name: "File System", package: "swift-file-system")
             ],
             path: "Sources/Package Graph"
         ),
