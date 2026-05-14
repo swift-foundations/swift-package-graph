@@ -39,6 +39,8 @@ let package = Package(
             name: "Package Graph",
             dependencies: [
                 .product(name: "Graph Primitives Core", package: "swift-graph-primitives"),
+                .product(name: "Graph Topological Primitives", package: "swift-graph-primitives"),
+                .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
                 .product(name: "SPM Standard", package: "swift-spm-standard")
             ],
             path: "Sources/Package Graph"

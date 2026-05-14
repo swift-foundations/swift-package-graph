@@ -144,4 +144,246 @@ struct PackageGraphTests {
         let wavesAll = graph.transitiveDependents(of: "d", depth: .max)
         #expect(wavesAll.count == 3)
     }
+
+    // MARK: - Structural queries (v0.2)
+
+    @Test("Empty graph: structural queries return empty results")
+    func emptyGraphStructuralQueries() throws {
+        let workspace = Package.Workspace(root: "/tmp", manifests: [])
+        let graph = try Package.Graph(workspace)
+
+        #expect(graph.cycles().isEmpty)
+        let topo = try graph.topologicalOrder()
+        #expect(topo.isEmpty)
+        #expect(graph.stronglyConnectedComponents().isEmpty)
+        #expect(graph.dot() == "digraph PackageGraph {\n}\n")
+    }
+
+    @Test("Topological order: linear chain returns dependencies first")
+    func topologicalOrderLinearChain() throws {
+        // swift-root depends on swift-middle, swift-middle depends on swift-leaf.
+        // Expected build order: leaf → middle → root.
+        let root = Package.Manifest(
+            name: "swift-root",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../swift-middle"), name: "swift-middle", products: ["Middle"])]
+        )
+        let middle = Package.Manifest(
+            name: "swift-middle",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../swift-leaf"), name: "swift-leaf", products: ["Leaf"])]
+        )
+        let leaf = Package.Manifest(name: "swift-leaf", toolsVersion: "6.3")
+
+        let workspace = Package.Workspace(root: "/tmp", manifests: [root, middle, leaf])
+        let graph = try Package.Graph(workspace)
+
+        let order = try graph.topologicalOrder()
+        #expect(order == ["swift-leaf", "swift-middle", "swift-root"])
+    }
+
+    @Test("Topological order: diamond honors dependency precedence")
+    func topologicalOrderDiamond() throws {
+        // a → {b, c}, b → d, c → d. Expected: d before {b, c} before a.
+        let a = Package.Manifest(
+            name: "a",
+            toolsVersion: "6.3",
+            dependencies: [
+                .init(source: .path("../b"), name: "b", products: ["B"]),
+                .init(source: .path("../c"), name: "c", products: ["C"])
+            ]
+        )
+        let b = Package.Manifest(
+            name: "b",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../d"), name: "d", products: ["D"])]
+        )
+        let c = Package.Manifest(
+            name: "c",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../d"), name: "d", products: ["D"])]
+        )
+        let d = Package.Manifest(name: "d", toolsVersion: "6.3")
+
+        let workspace = Package.Workspace(root: "/tmp", manifests: [a, b, c, d])
+        let graph = try Package.Graph(workspace)
+
+        let order = try graph.topologicalOrder()
+        let aIdx = order.firstIndex(of: "a")!
+        let bIdx = order.firstIndex(of: "b")!
+        let cIdx = order.firstIndex(of: "c")!
+        let dIdx = order.firstIndex(of: "d")!
+
+        #expect(dIdx < bIdx)
+        #expect(dIdx < cIdx)
+        #expect(bIdx < aIdx)
+        #expect(cIdx < aIdx)
+    }
+
+    @Test("Topological order: cycle throws cycleDetected")
+    func topologicalOrderCycleThrows() throws {
+        // a → b → a
+        let a = Package.Manifest(
+            name: "a",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../b"), name: "b", products: ["B"])]
+        )
+        let b = Package.Manifest(
+            name: "b",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../a"), name: "a", products: ["A"])]
+        )
+
+        let workspace = Package.Workspace(root: "/tmp", manifests: [a, b])
+        let graph = try Package.Graph(workspace)
+
+        #expect(throws: Package.Graph.Error.self) {
+            _ = try graph.topologicalOrder()
+        }
+
+        do {
+            _ = try graph.topologicalOrder()
+            Issue.record("expected cycleDetected error")
+        } catch {
+            #expect(error.kind == .cycleDetected)
+        }
+    }
+
+    @Test("Cycles: acyclic graph returns empty")
+    func cyclesAcyclic() throws {
+        let leaf = Package.Manifest(name: "leaf", toolsVersion: "6.3")
+        let root = Package.Manifest(
+            name: "root",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../leaf"), name: "leaf", products: ["Leaf"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [root, leaf])
+        let graph = try Package.Graph(workspace)
+
+        #expect(graph.cycles().isEmpty)
+    }
+
+    @Test("Cycles: two-node cycle is reported")
+    func cyclesTwoNode() throws {
+        // a → b → a
+        let a = Package.Manifest(
+            name: "a",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../b"), name: "b", products: ["B"])]
+        )
+        let b = Package.Manifest(
+            name: "b",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../a"), name: "a", products: ["A"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [a, b])
+        let graph = try Package.Graph(workspace)
+
+        let cycles = graph.cycles()
+        #expect(cycles.count == 1)
+        #expect(cycles[0].nodes == ["a", "b"])
+    }
+
+    @Test("Cycles: self-loop is reported")
+    func cyclesSelfLoop() throws {
+        // a → a
+        let a = Package.Manifest(
+            name: "a",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("./a"), name: "a", products: ["A"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [a])
+        let graph = try Package.Graph(workspace)
+
+        let cycles = graph.cycles()
+        #expect(cycles.count == 1)
+        #expect(cycles[0].nodes == ["a"])
+    }
+
+    @Test("SCC: linear chain yields singleton components")
+    func sccLinearChain() throws {
+        let leaf = Package.Manifest(name: "leaf", toolsVersion: "6.3")
+        let middle = Package.Manifest(
+            name: "middle",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../leaf"), name: "leaf", products: ["Leaf"])]
+        )
+        let root = Package.Manifest(
+            name: "root",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../middle"), name: "middle", products: ["Middle"])]
+        )
+
+        let workspace = Package.Workspace(root: "/tmp", manifests: [root, middle, leaf])
+        let graph = try Package.Graph(workspace)
+
+        let sccs = graph.stronglyConnectedComponents()
+        #expect(sccs.count == 3)
+        #expect(sccs.allSatisfy { $0.count == 1 })
+        // Order is reverse-topological per Tarjan; collect & sort to compare set-wise.
+        let flat = Swift.Set(sccs.flatMap { $0 })
+        #expect(flat == ["leaf", "middle", "root"])
+    }
+
+    @Test("SCC: two-cycle yields one component")
+    func sccTwoCycle() throws {
+        let a = Package.Manifest(
+            name: "a",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../b"), name: "b", products: ["B"])]
+        )
+        let b = Package.Manifest(
+            name: "b",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../a"), name: "a", products: ["A"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [a, b])
+        let graph = try Package.Graph(workspace)
+
+        let sccs = graph.stronglyConnectedComponents()
+        #expect(sccs.count == 1)
+        #expect(sccs[0] == ["a", "b"])
+    }
+
+    @Test("DOT: linear chain emits sorted nodes and edges")
+    func dotLinearChain() throws {
+        let leaf = Package.Manifest(name: "swift-leaf", toolsVersion: "6.3")
+        let root = Package.Manifest(
+            name: "swift-root",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .path("../swift-leaf"), name: "swift-leaf", products: ["Leaf"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [root, leaf])
+        let graph = try Package.Graph(workspace)
+
+        let expected = """
+        digraph PackageGraph {
+          "swift-leaf";
+          "swift-root";
+          "swift-root" -> "swift-leaf";
+        }
+
+        """
+        #expect(graph.dot() == expected)
+    }
+
+    @Test("DOT: external dependencies are omitted")
+    func dotExternalDependencyOmitted() throws {
+        // local depends on external, but external isn't in the workspace.
+        let local = Package.Manifest(
+            name: "local",
+            toolsVersion: "6.3",
+            dependencies: [.init(source: .url("https://example.invalid/external", from: "1.0.0"), name: "external", products: ["External"])]
+        )
+        let workspace = Package.Workspace(root: "/tmp", manifests: [local])
+        let graph = try Package.Graph(workspace)
+
+        let expected = """
+        digraph PackageGraph {
+          "local";
+        }
+
+        """
+        #expect(graph.dot() == expected)
+    }
 }

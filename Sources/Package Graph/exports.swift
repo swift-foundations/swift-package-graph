@@ -18,9 +18,11 @@
 //   (for `Package.Name`, `Target.Name`, `Product.Name`) and
 //   `Version_Primitives` (for `Version.Tools` etc.).
 //
-// v0.1 does not re-export `Graph_Primitives_Core` — the internal-only
-// graph algorithms are an implementation detail. v0.2 will re-export
-// once we compose `Graph.Sequential` for topological / cycle / SCC
-// queries that consumers may want to drive directly.
+// `Graph_Primitives_Core` is consumed internally to compose
+// `Graph.Sequential` for topological / cycle / SCC queries; the public
+// surface translates all results back to ``Package/Name`` so consumers
+// never receive raw graph types. Re-exporting it would expand the
+// public dependency surface for no consumer-visible payoff — keep it
+// internal until a real need surfaces.
 
 @_exported public import SPM_Standard
