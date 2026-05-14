@@ -85,21 +85,11 @@ extension Package.Workspace {
         let swiftExecutable = configuration.swiftExecutable ?? defaultSwiftExecutable()
         let concurrencyBound = Swift.max(1, configuration.maxConcurrentLoads)
 
-        let manifests: [Package.Manifest]
-        do {
-            manifests = try await loadManifests(
-                packageDirectories: packageDirectories,
-                swiftExecutable: swiftExecutable,
-                concurrencyBound: concurrencyBound
-            )
-        } catch let error as Self.Error {
-            throw error
-        } catch {
-            throw .init(
-                kind: .subprocessError,
-                detail: "unexpected error during concurrent manifest load: \(error)"
-            )
-        }
+        let manifests = try await loadManifests(
+            packageDirectories: packageDirectories,
+            swiftExecutable: swiftExecutable,
+            concurrencyBound: concurrencyBound
+        )
 
         return Package.Workspace(root: root, manifests: manifests)
     }
@@ -228,7 +218,7 @@ extension Package.Workspace {
         packageDirectories: [Paths.Path],
         swiftExecutable: Paths.Path,
         concurrencyBound: Swift.Int
-    ) async throws -> [Package.Manifest] {
+    ) async throws(Package.Workspace.Error) -> [Package.Manifest] {
         var results: [Package.Manifest] = []
         var index = 0
         while index < packageDirectories.count {
@@ -243,27 +233,47 @@ extension Package.Workspace {
 
     /// Spawn `swift package dump-package` for every directory in
     /// `chunk` concurrently; collect manifests in input order.
+    ///
+    /// Swift 6.3's `withThrowingTaskGroup` does not accept a typed
+    /// `Failure` parameter — its body and iteration always throw
+    /// `any Error`. The TaskGroup is therefore the one untyped-throws
+    /// boundary in this pipeline; we bridge here so the helper's
+    /// public-facing signature remains typed.
     private static func loadChunk(
         _ chunk: [Paths.Path], swiftExecutable: Paths.Path
-    ) async throws -> [Package.Manifest] {
+    ) async throws(Package.Workspace.Error) -> [Package.Manifest] {
         let exec = swiftExecutable
-        return try await withThrowingTaskGroup(
-            of: (Swift.Int, Package.Manifest).self
-        ) { group in
-            for (offset, directory) in chunk.enumerated() {
-                group.addTask { () throws -> (Swift.Int, Package.Manifest) in
-                    let manifest = try loadManifest(
-                        packageDirectory: directory, swiftExecutable: exec
-                    )
-                    return (offset, manifest)
+        do {
+            return try await withThrowingTaskGroup(
+                of: (Swift.Int, Package.Manifest).self
+            ) { group in
+                for (offset, directory) in chunk.enumerated() {
+                    group.addTask {
+                        let manifest = try loadManifest(
+                            packageDirectory: directory, swiftExecutable: exec
+                        )
+                        return (offset, manifest)
+                    }
                 }
+                var indexed: [(Swift.Int, Package.Manifest)] = []
+                for try await pair in group {
+                    indexed.append(pair)
+                }
+                indexed.sort { $0.0 < $1.0 }
+                return indexed.map { $0.1 }
             }
-            var indexed: [(Swift.Int, Package.Manifest)] = []
-            for try await pair in group {
-                indexed.append(pair)
-            }
-            indexed.sort { $0.0 < $1.0 }
-            return indexed.map { $0.1 }
+        } catch let error as Package.Workspace.Error {
+            throw error
+        } catch is CancellationError {
+            throw .init(
+                kind: .subprocessError,
+                detail: "concurrent manifest load cancelled"
+            )
+        } catch {
+            throw .init(
+                kind: .subprocessError,
+                detail: "unexpected error during concurrent manifest load: \(error)"
+            )
         }
     }
 }
