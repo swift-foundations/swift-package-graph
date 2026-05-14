@@ -86,8 +86,18 @@ extension Package.Manifest {
             guard identityValue.isString else { throw .missingKey("fileSystem.identity") }
             let pathValue = record["path"]
             guard pathValue.isString else { throw .missingKey("fileSystem.path") }
+            let pathString = Swift.String(pathValue)
+            let path: Paths.Path
+            do {
+                path = try Paths.Path(pathString)
+            } catch {
+                throw .typeMismatch(
+                    expected: "valid filesystem path",
+                    got: pathString
+                )
+            }
             return Package.Dependency(
-                source: .path(Swift.String(pathValue)),
+                source: .path(path),
                 name: Package.Name(_unchecked: Swift.String(identityValue)),
                 products: []
             )
@@ -107,9 +117,18 @@ extension Package.Manifest {
             } else {
                 urlString = ""
             }
+            let url: URI
+            do {
+                url = try URI(urlString)
+            } catch {
+                throw .typeMismatch(
+                    expected: "valid URI per RFC 3986",
+                    got: urlString
+                )
+            }
             let requirement = try _decodeRequirement(record["requirement"])
             return Package.Dependency(
-                source: .url(urlString, requirement),
+                source: .url(url, requirement),
                 name: Package.Name(_unchecked: identity),
                 products: []
             )
