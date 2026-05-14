@@ -1,0 +1,10 @@
+# .github/metadata.yaml
+description: "Package-level dependency graph queries for SwiftPM workspaces."
+topics:
+  - foundations
+  - package-graph
+  - swiftpm
+  - dependency-graph
+homepage: "https://swift-institute.org"
+readme:
+  family: E
