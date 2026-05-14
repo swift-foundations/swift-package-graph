@@ -27,12 +27,10 @@ let package = Package(
         .executable(name: "package-graph", targets: ["Package Graph CLI"])
     ],
     dependencies: [
-        // v0.2: discover pipeline restores swift-process (subprocess spawn for
-        // `swift package dump-package`) and swift-file-system (workspace walk).
-        // JSON decoding goes through Foundation's `JSONDecoder` consuming the
-        // `Codable` conformance landed in swift-spm-standard Phase 3a — the
-        // ecosystem's swift-json deliberately does not bridge Codable, so the
-        // pragmatic fit is Foundation here at L3.
+        // v0.2: discover pipeline uses swift-process (subprocess spawn for
+        // `swift package dump-package`), swift-file-system (workspace walk),
+        // and swift-json (Foundation-free JSON parsing via JSON.Serializable
+        // walking — replaces Foundation's JSONDecoder).
         // swift-async / swift-path-primitives / swift-time-primitives skipped
         // for v0.2 — `TaskGroup` covers concurrency, `Swift.String` covers path
         // joining, no timeouts in discover.
@@ -40,7 +38,8 @@ let package = Package(
         .package(path: "../../swift-standards/swift-spm-standard"),
         .package(path: "../swift-process"),
         .package(path: "../swift-file-system"),
-        .package(path: "../swift-paths")
+        .package(path: "../swift-paths"),
+        .package(path: "../swift-json")
     ],
     targets: [
         .target(
@@ -52,7 +51,8 @@ let package = Package(
                 .product(name: "SPM Standard", package: "swift-spm-standard"),
                 .product(name: "Process", package: "swift-process"),
                 .product(name: "File System", package: "swift-file-system"),
-                .product(name: "Paths", package: "swift-paths")
+                .product(name: "Paths", package: "swift-paths"),
+                .product(name: "JSON", package: "swift-json")
             ],
             path: "Sources/Package Graph"
         ),
@@ -66,7 +66,8 @@ let package = Package(
         .testTarget(
             name: "Package Graph Tests",
             dependencies: [
-                "Package Graph"
+                "Package Graph",
+                .product(name: "File System", package: "swift-file-system")
             ]
         )
     ],

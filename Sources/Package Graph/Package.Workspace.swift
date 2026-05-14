@@ -13,9 +13,8 @@ internal import File_System
 internal import Process
 
 // JSON decoding is delegated to ``Package/Manifest/decode(jsonBytes:)`` in
-// `Package.Manifest.Decode.swift` — that file isolates the Foundation
-// import to avoid the `Process` (Foundation NSTask) / `Process` (swift-process)
-// type collision that arises when both modules are visible in the same file.
+// `Package.Manifest.Decode.swift` — that file walks swift-json's typed
+// `JSON` DOM directly (Foundation-free; no `JSONDecoder`).
 
 extension Package {
     /// A discovered SwiftPM workspace — a directory root plus the
@@ -199,7 +198,6 @@ extension Package.Workspace {
             )
         }
 
-        // swiftlint:disable typed_throws_required
         do {
             return try Package.Manifest.decode(jsonBytes: stdoutBytes)
         } catch {
@@ -208,7 +206,6 @@ extension Package.Workspace {
                 detail: "'\(packageDirectory.string)' JSON decode failed: \(error)"
             )
         }
-        // swiftlint:enable typed_throws_required
     }
 
     /// Load manifests in parallel with a concurrency bound, in

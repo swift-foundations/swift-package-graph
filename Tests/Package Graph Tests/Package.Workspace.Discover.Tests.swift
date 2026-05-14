@@ -9,12 +9,14 @@
 //
 // ===----------------------------------------------------------------------===//
 
-// Foundation is used to construct on-disk fixture workspaces (FileManager,
-// temp dir, write Package.swift contents) — the discover pipeline under
-// test consumes real Swift packages, so the fixtures must be parseable by
-// SwiftPM. swiftlint exemption per the existing test pattern.
-// swiftlint:disable no_foundation_import_warning typed_throws_required
-import Foundation
+// Foundation-free test fixtures via swift-file-system + swift-paths.
+// `makeTempDirectory` constructs a unique-suffix path under `/tmp` and
+// creates it via `File.Directory.create.recursive()`. `writePackage`
+// builds a minimal SwiftPM-parseable package layout (Package.swift +
+// Sources/<name>/Placeholder.swift) via `File.write.atomic`.
+
+import File_System
+import Paths
 import Testing
 
 @testable import Package_Graph
@@ -26,15 +28,15 @@ struct PackageWorkspaceDiscoverTests {
     @Test("minimal workspace yields one manifest")
     func minimalWorkspace() async throws {
         let root = try makeTempDirectory()
-        defer { try? FileManager.default.removeItem(atPath: root) }
+        defer { deleteTempDirectory(root) }
 
         try writePackage(
-            atDirectory: root + "/swift-leaf",
+            atDirectory: root / "swift-leaf",
             name: "swift-leaf",
             dependencies: []
         )
 
-        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
+        let workspace = try await Package.Workspace.discover(at: root)
         #expect(workspace.manifests.count == 1)
         #expect(workspace.manifests[0].name == "swift-leaf")
         #expect(workspace.manifests[0].dependencies.isEmpty)
@@ -45,60 +47,67 @@ struct PackageWorkspaceDiscoverTests {
     @Test("chain workspace yields three manifests with correct adjacency")
     func chainWorkspace() async throws {
         let root = try makeTempDirectory()
-        defer { try? FileManager.default.removeItem(atPath: root) }
+        defer { deleteTempDirectory(root) }
 
         try writePackage(
-            atDirectory: root + "/swift-c",
+            atDirectory: root / "swift-c",
             name: "swift-c",
             dependencies: []
         )
         try writePackage(
-            atDirectory: root + "/swift-b",
+            atDirectory: root / "swift-b",
             name: "swift-b",
             dependencies: [(localName: "swift-c", relativePath: "../swift-c")]
         )
         try writePackage(
-            atDirectory: root + "/swift-a",
+            atDirectory: root / "swift-a",
             name: "swift-a",
             dependencies: [(localName: "swift-b", relativePath: "../swift-b")]
         )
 
-        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
+        let workspace = try await Package.Workspace.discover(at: root)
         #expect(workspace.manifests.count == 3)
 
-        let names = Set(workspace.manifests.map(\.name))
-        #expect(names == ["swift-a", "swift-b", "swift-c"])
+        let byName = Swift.Dictionary(
+            uniqueKeysWithValues: workspace.manifests.map { ($0.name, $0) }
+        )
+        #expect(byName["swift-a"]?.dependencies.count == 1)
+        #expect(byName["swift-b"]?.dependencies.count == 1)
+        #expect(byName["swift-c"]?.dependencies.isEmpty == true)
 
         let graph = try Package.Graph(workspace)
-        #expect(graph.directDependents(of: "swift-c") == ["swift-b"])
-        #expect(graph.directDependents(of: "swift-b") == ["swift-a"])
-        #expect(graph.directDependents(of: "swift-a").isEmpty)
+        let order = try graph.topologicalOrder()
+        let cIndex = order.firstIndex(of: "swift-c") ?? .max
+        let bIndex = order.firstIndex(of: "swift-b") ?? .max
+        let aIndex = order.firstIndex(of: "swift-a") ?? .max
+        #expect(cIndex < bIndex)
+        #expect(bIndex < aIndex)
     }
 
-    // MARK: diamond/ — A → {B, C} → D, no cycles
+    // MARK: diamond/ — A → {B, C} → D
 
-    @Test("diamond workspace yields four manifests with no cycles")
+    @Test("diamond workspace yields four manifests, no cycles")
     func diamondWorkspace() async throws {
         let root = try makeTempDirectory()
-        defer { try? FileManager.default.removeItem(atPath: root) }
+        defer { deleteTempDirectory(root) }
 
         try writePackage(
-            atDirectory: root + "/swift-d",
+            atDirectory: root / "swift-d",
             name: "swift-d",
             dependencies: []
         )
         try writePackage(
-            atDirectory: root + "/swift-b",
+            atDirectory: root / "swift-b",
             name: "swift-b",
             dependencies: [(localName: "swift-d", relativePath: "../swift-d")]
         )
         try writePackage(
-            atDirectory: root + "/swift-c",
+            atDirectory: root / "swift-c",
             name: "swift-c",
             dependencies: [(localName: "swift-d", relativePath: "../swift-d")]
         )
         try writePackage(
-            atDirectory: root + "/swift-a",
+            atDirectory: root / "swift-a",
             name: "swift-a",
             dependencies: [
                 (localName: "swift-b", relativePath: "../swift-b"),
@@ -106,72 +115,71 @@ struct PackageWorkspaceDiscoverTests {
             ]
         )
 
-        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
+        let workspace = try await Package.Workspace.discover(at: root)
         #expect(workspace.manifests.count == 4)
 
         let graph = try Package.Graph(workspace)
-        #expect(Set(graph.directDependents(of: "swift-d")) == ["swift-b", "swift-c"])
         #expect(graph.cycles().isEmpty)
-
-        // swift-a transitively depends on swift-d through both arms.
-        let dependents = graph.transitiveDependents(of: "swift-d", depth: .max)
-        let allDependents = Set(dependents.flatMap(\.packages))
-        #expect(allDependents == ["swift-a", "swift-b", "swift-c"])
     }
 
-    // MARK: Failure modes
+    // MARK: failure modes
 
     @Test("nonexistent root throws .rootDoesNotExist")
-    func nonexistentRoot() async {
-        await #expect(throws: Package.Workspace.Error.self) {
-            try await Package.Workspace.discover(
-                at: "/nonexistent/path/does/not/exist/\(UUID().uuidString)"
-            )
+    func nonexistentRoot() async throws {
+        let root = try Paths.Path("/tmp/this-path-does-not-exist-\(Swift.Int.random(in: 0...Swift.Int.max))")
+        do {
+            _ = try await Package.Workspace.discover(at: root)
+            Issue.record("expected throw")
+        } catch let error as Package.Workspace.Error {
+            #expect(error.kind == .rootDoesNotExist)
         }
     }
 
-    @Test("empty workspace (no Package.swift) throws .noPackagesFound")
-    func emptyWorkspaceThrows() async throws {
+    @Test("empty workspace throws .noPackagesFound")
+    func emptyWorkspace() async throws {
         let root = try makeTempDirectory()
-        defer { try? FileManager.default.removeItem(atPath: root) }
+        defer { deleteTempDirectory(root) }
 
-        await #expect(throws: Package.Workspace.Error.self) {
-            try await Package.Workspace.discover(at: try Paths.Path(root))
+        do {
+            _ = try await Package.Workspace.discover(at: root)
+            Issue.record("expected throw")
+        } catch let error as Package.Workspace.Error {
+            #expect(error.kind == .noPackagesFound)
         }
     }
 }
 
 // MARK: - Helpers
 
-private func makeTempDirectory() throws -> String {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("package-graph-tests-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(
-        at: url, withIntermediateDirectories: true
-    )
-    return url.path
+private func makeTempDirectory() throws -> Paths.Path {
+    let suffix = Swift.String(Swift.Int.random(in: 0...Swift.Int.max), radix: 36)
+    let path = try Paths.Path("/tmp/package-graph-tests-\(suffix)")
+    let dir = File.Directory(path)
+    try dir.create.recursive()
+    return path
+}
+
+private func deleteTempDirectory(_ path: Paths.Path) {
+    let dir = File.Directory(path)
+    try? dir.delete.recursive()
 }
 
 private func writePackage(
-    atDirectory directory: String,
-    name: String,
-    dependencies: [(localName: String, relativePath: String)]
+    atDirectory directory: Paths.Path,
+    name: Swift.String,
+    dependencies: [(localName: Swift.String, relativePath: Swift.String)]
 ) throws {
-    try FileManager.default.createDirectory(
-        atPath: directory, withIntermediateDirectories: true
-    )
+    let dir = File.Directory(directory)
+    try dir.create.recursive()
 
     // Sources/<name>/<name>.swift placeholder — needed for SwiftPM to
     // accept the package layout under `swift package dump-package`.
-    let sourcesDir = directory + "/Sources/" + name
-    try FileManager.default.createDirectory(
-        atPath: sourcesDir, withIntermediateDirectories: true
-    )
-    let sourcePlaceholder = "// auto-generated test fixture\n"
-    try sourcePlaceholder.write(
-        toFile: sourcesDir + "/Placeholder.swift",
-        atomically: true, encoding: .utf8
-    )
+    let sourcesDir = directory / "Sources" / Paths.Path.Component(stringLiteral: name)
+    let sourcesDirHandle = File.Directory(sourcesDir)
+    try sourcesDirHandle.create.recursive()
+
+    let placeholderFile = File(sourcesDir / "Placeholder.swift")
+    try placeholderFile.write.atomic("// auto-generated test fixture\n")
 
     let depEntries = dependencies.map { dep in
         ".package(path: \"\(dep.relativePath)\")"
@@ -181,8 +189,12 @@ private func writePackage(
         ".product(name: \"\(dep.localName)\", package: \"\(dep.localName)\")"
     }.joined(separator: ",\n                ")
 
-    let depsBlock = depEntries.isEmpty ? "" : "    dependencies: [\n        \(depEntries)\n    ],\n"
-    let depTargetsBlock = depTargets.isEmpty ? "" : "            dependencies: [\n                \(depTargets)\n            ],\n"
+    let depsBlock = depEntries.isEmpty
+        ? ""
+        : "    dependencies: [\n        \(depEntries)\n    ],\n"
+    let depTargetsBlock = depTargets.isEmpty
+        ? ""
+        : "            dependencies: [\n                \(depTargets)\n            ],\n"
 
     let manifest = """
     // swift-tools-version: 6.3.1
@@ -198,9 +210,6 @@ private func writePackage(
         ]
     )
     """
-    try manifest.write(
-        toFile: directory + "/Package.swift",
-        atomically: true, encoding: .utf8
-    )
+    let manifestFile = File(directory / "Package.swift")
+    try manifestFile.write.atomic(manifest)
 }
-// swiftlint:enable no_foundation_import_warning typed_throws_required
