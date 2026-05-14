@@ -16,7 +16,7 @@ extension Package {
     ///
     /// Construct via ``discover(at:configuration:)``, then build a
     /// ``Package/Graph`` from it.
-    public struct Workspace: Swift.Sendable, Swift.Hashable {
+    public struct Workspace: ~Copyable, Swift.Sendable {
         /// The on-disk root path the workspace was discovered at.
         public let root: Swift.String
 

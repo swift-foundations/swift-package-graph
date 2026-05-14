@@ -22,10 +22,7 @@ extension Package {
     /// v0.1 uses bespoke adjacency tables. v0.2 will compose
     /// `swift-graph-primitives`' `Graph.Sequential` for richer
     /// algorithms (topological order, cycle detection, SCC).
-    public struct Graph: Swift.Sendable {
-        /// The workspace this graph was built from.
-        public let workspace: Workspace
-
+    public struct Graph: ~Copyable, Swift.Sendable {
         @usableFromInline
         internal let manifestByName: [Package.Name: Package.Manifest]
 
@@ -35,7 +32,7 @@ extension Package {
         @usableFromInline
         internal let reverseAdjacency: [Package.Name: Swift.Set<Package.Name>]
 
-        public init(_ workspace: Workspace) throws(Self.Error) {
+        public init(_ workspace: borrowing Workspace) throws(Self.Error) {
             var manifestByName: [Package.Name: Package.Manifest] = [:]
             var forwardAdjacency: [Package.Name: Swift.Set<Package.Name>] = [:]
             var reverseAdjacency: [Package.Name: Swift.Set<Package.Name>] = [:]
@@ -52,7 +49,6 @@ extension Package {
                 forwardAdjacency[manifest.name] = deps
             }
 
-            self.workspace = workspace
             self.manifestByName = manifestByName
             self.forwardAdjacency = forwardAdjacency
             self.reverseAdjacency = reverseAdjacency
