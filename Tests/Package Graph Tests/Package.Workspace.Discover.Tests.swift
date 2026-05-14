@@ -34,7 +34,7 @@ struct PackageWorkspaceDiscoverTests {
             dependencies: []
         )
 
-        let workspace = try await Package.Workspace.discover(at: root)
+        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
         #expect(workspace.manifests.count == 1)
         #expect(workspace.manifests[0].name == "swift-leaf")
         #expect(workspace.manifests[0].dependencies.isEmpty)
@@ -63,7 +63,7 @@ struct PackageWorkspaceDiscoverTests {
             dependencies: [(localName: "swift-b", relativePath: "../swift-b")]
         )
 
-        let workspace = try await Package.Workspace.discover(at: root)
+        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
         #expect(workspace.manifests.count == 3)
 
         let names = Set(workspace.manifests.map(\.name))
@@ -106,7 +106,7 @@ struct PackageWorkspaceDiscoverTests {
             ]
         )
 
-        let workspace = try await Package.Workspace.discover(at: root)
+        let workspace = try await Package.Workspace.discover(at: try Paths.Path(root))
         #expect(workspace.manifests.count == 4)
 
         let graph = try Package.Graph(workspace)
@@ -136,7 +136,7 @@ struct PackageWorkspaceDiscoverTests {
         defer { try? FileManager.default.removeItem(atPath: root) }
 
         await #expect(throws: Package.Workspace.Error.self) {
-            try await Package.Workspace.discover(at: root)
+            try await Package.Workspace.discover(at: try Paths.Path(root))
         }
     }
 }

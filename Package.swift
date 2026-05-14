@@ -39,7 +39,8 @@ let package = Package(
         .package(path: "../../swift-primitives/swift-graph-primitives"),
         .package(path: "../../swift-standards/swift-spm-standard"),
         .package(path: "../swift-process"),
-        .package(path: "../swift-file-system")
+        .package(path: "../swift-file-system"),
+        .package(path: "../swift-paths")
     ],
     targets: [
         .target(
@@ -50,7 +51,8 @@ let package = Package(
                 .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
                 .product(name: "SPM Standard", package: "swift-spm-standard"),
                 .product(name: "Process", package: "swift-process"),
-                .product(name: "File System", package: "swift-file-system")
+                .product(name: "File System", package: "swift-file-system"),
+                .product(name: "Paths", package: "swift-paths")
             ],
             path: "Sources/Package Graph"
         ),

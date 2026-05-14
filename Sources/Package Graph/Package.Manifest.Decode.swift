@@ -34,8 +34,7 @@ extension Package.Manifest {
     /// - Parameter bytes: UTF-8-encoded JSON.
     /// - Returns: The decoded manifest.
     /// - Throws: `Swift.Error` from Foundation's decoder.
-    @usableFromInline
-    internal static func _decode(jsonBytes bytes: [UInt8]) throws -> Package.Manifest {
+    package static func decode(jsonBytes bytes: [UInt8]) throws -> Package.Manifest {
         let data = Data(bytes)
         return try JSONDecoder().decode(Package.Manifest.self, from: data)
     }

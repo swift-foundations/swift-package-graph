@@ -18,6 +18,12 @@
 //   (for `Package.Name`, `Target.Name`, `Product.Name`) and
 //   `Version_Primitives` (for `Version.Tools` etc.).
 //
+// - `Paths` — exposed because ``Package/Workspace/root`` and
+//   ``Package/Workspace/discover(at:configuration:)`` are typed in
+//   ``File/Path`` (alias of ``Paths/Path``). Consumers constructing a
+//   workspace need the typed path constructor; re-export keeps that
+//   ergonomic without forcing them to add a `swift-paths` dep.
+//
 // `Graph_Primitives_Core` is consumed internally to compose
 // `Graph.Sequential` for topological / cycle / SCC queries; the public
 // surface translates all results back to ``Package/Name`` so consumers
@@ -26,3 +32,4 @@
 // internal until a real need surfaces.
 
 @_exported public import SPM_Standard
+@_exported public import Paths

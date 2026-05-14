@@ -12,7 +12,7 @@
 internal import File_System
 internal import Process
 
-// JSON decoding is delegated to ``Package/Manifest/_decode(jsonBytes:)`` in
+// JSON decoding is delegated to ``Package/Manifest/decode(jsonBytes:)`` in
 // `Package.Manifest.Decode.swift` — that file isolates the Foundation
 // import to avoid the `Process` (Foundation NSTask) / `Process` (swift-process)
 // type collision that arises when both modules are visible in the same file.
@@ -26,14 +26,14 @@ extension Package {
     /// ``Package/Graph`` from it.
     public struct Workspace: ~Copyable, Swift.Sendable {
         /// The on-disk root path the workspace was discovered at.
-        public let root: Swift.String
+        public let root: Paths.Path
 
         /// Manifests loaded from packages within the workspace.
         /// Order is insertion-order from the filesystem walk; not
         /// otherwise specified.
         public let manifests: [Package.Manifest]
 
-        public init(root: Swift.String, manifests: [Package.Manifest]) {
+        public init(root: Paths.Path, manifests: [Package.Manifest]) {
             self.root = root
             self.manifests = manifests
         }
@@ -64,30 +64,30 @@ extension Package.Workspace {
     /// - Throws: ``Workspace/Error`` on directory-walk failure,
     ///   subprocess failure, or manifest-JSON decode failure.
     public static func discover(
-        at root: Swift.String,
+        at root: Paths.Path,
         configuration: Configuration = .init()
     ) async throws(Self.Error) -> Self {
-        guard _directoryExists(at: root) else {
-            throw .init(kind: .rootDoesNotExist, detail: root)
+        guard directoryExists(at: root) else {
+            throw .init(kind: .rootDoesNotExist, detail: root.string)
         }
 
-        let packageDirectories = _findPackageDirectories(
+        let packageDirectories = findPackageDirectories(
             under: root, maxDepth: configuration.maxDepth
         )
 
         guard !packageDirectories.isEmpty else {
             throw .init(
                 kind: .noPackagesFound,
-                detail: "no Package.swift found within depth \(configuration.maxDepth) of \(root)"
+                detail: "no Package.swift found within depth \(configuration.maxDepth) of \(root.string)"
             )
         }
 
-        let swiftExecutable = configuration.swiftExecutable ?? _defaultSwiftExecutable()
+        let swiftExecutable = configuration.swiftExecutable ?? defaultSwiftExecutable()
         let concurrencyBound = Swift.max(1, configuration.maxConcurrentLoads)
 
         let manifests: [Package.Manifest]
         do {
-            manifests = try await _loadManifestsConcurrently(
+            manifests = try await loadManifests(
                 packageDirectories: packageDirectories,
                 swiftExecutable: swiftExecutable,
                 concurrencyBound: concurrencyBound
@@ -105,94 +105,81 @@ extension Package.Workspace {
     }
 }
 
-// MARK: - Internal helpers (filesystem walk)
+// MARK: - Filesystem walk (private)
 
 extension Package.Workspace {
-    /// Returns true iff `path` exists on disk AND is a directory.
-    @usableFromInline
-    internal static func _directoryExists(at path: Swift.String) -> Swift.Bool {
-        guard let filePath = try? File.Path(path) else { return false }
-        // Treat the path as a directory by attempting to open its entries.
-        return (try? File.Directory(filePath).entries()) != nil
+    /// True iff `path` is a directory openable for entry listing.
+    private static func directoryExists(at path: Paths.Path) -> Swift.Bool {
+        (try? File.Directory(path).entries()) != nil
     }
 
-    /// Returns true iff `path/Package.swift` exists as a file.
-    @usableFromInline
-    internal static func _hasPackageSwift(in directory: Swift.String) -> Swift.Bool {
-        let manifestPath = directory + "/Package.swift"
-        guard let filePath = try? File.Path(manifestPath) else { return false }
-        // A file-shape entry check via stat.
-        return File.System.Stat.isFile(at: filePath)
+    /// True iff `directory/Package.swift` exists as a regular file.
+    private static func hasManifest(in directory: Paths.Path) -> Swift.Bool {
+        File.System.Stat.isFile(at: directory / "Package.swift")
     }
 
     /// Walk depth-bounded breadth-first, returning every directory
     /// at depth ≤ `maxDepth` that contains a `Package.swift`.
     ///
     /// The root itself (depth 0) is included if it contains one.
-    /// Symbolic links and hidden directories (`.foo`) are skipped.
-    @usableFromInline
-    internal static func _findPackageDirectories(
-        under root: Swift.String, maxDepth: Swift.Int
-    ) -> [Swift.String] {
-        var found: [Swift.String] = []
-        var queue: [(path: Swift.String, depth: Swift.Int)] = [(root, 0)]
+    /// Hidden directories (`.foo`) are skipped to avoid descending
+    /// into `.build` and similar SwiftPM artefact directories.
+    /// Discovered packages are not descended into.
+    private static func findPackageDirectories(
+        under root: Paths.Path, maxDepth: Swift.Int
+    ) -> [Paths.Path] {
+        var found: [Paths.Path] = []
+        var queue: [(path: Paths.Path, depth: Swift.Int)] = [(root, 0)]
 
         while !queue.isEmpty {
             let (current, depth) = queue.removeFirst()
 
-            if _hasPackageSwift(in: current) {
+            if hasManifest(in: current) {
                 found.append(current)
-                // Don't descend into a discovered package — nested
-                // packages inside a Swift package (e.g., `.build`,
-                // test fixtures) are out of scope for v0.2.
                 continue
             }
 
-            guard depth < maxDepth else { continue }
-
-            guard let filePath = try? File.Path(current),
-                  let entries = try? File.Directory(filePath).entries()
+            guard depth < maxDepth,
+                  let entries = try? File.Directory(current).entries()
             else { continue }
 
-            for entry in entries {
-                guard entry.type == .directory else { continue }
-                // Decode the raw filesystem name to a string for
-                // path joining + filtering.
-                guard let nameString = Swift.String(entry.name) else { continue }
-                if nameString.hasPrefix(".") { continue }  // skip hidden + .build
-                queue.append((current + "/" + nameString, depth + 1))
+            for entry in entries where entry.type == .directory {
+                guard let nameString = Swift.String(entry.name),
+                      !nameString.hasPrefix("."),
+                      let component = try? entry.name.asPathComponent()
+                else { continue }
+                queue.append((current / component, depth + 1))
             }
         }
         return found
     }
 }
 
-// MARK: - Internal helpers (subprocess + JSON)
+// MARK: - Subprocess + decode (private)
 
 extension Package.Workspace {
-    /// Default `swift` executable resolution — relies on `$PATH`
-    /// lookup at spawn time via `/usr/bin/env`. Callers needing a
-    /// pinned toolchain set ``Configuration/swiftExecutable``.
-    @usableFromInline
-    internal static func _defaultSwiftExecutable() -> Swift.String {
+    /// Default `swift` executable resolution — `/usr/bin/env` so the
+    /// child does the `$PATH` lookup. Callers needing a pinned
+    /// toolchain set ``Configuration/swiftExecutable``.
+    private static func defaultSwiftExecutable() -> Paths.Path {
         "/usr/bin/env"
     }
 
     /// Spawn `swift package dump-package` in `packageDirectory`,
     /// capture stdout, decode as `Package.Manifest`.
-    @usableFromInline
-    internal static func _loadManifest(
-        packageDirectory: Swift.String,
-        swiftExecutable: Swift.String
+    private static func loadManifest(
+        packageDirectory: Paths.Path,
+        swiftExecutable: Paths.Path
     ) throws(Package.Workspace.Error) -> Package.Manifest {
+        let executableString = swiftExecutable.string
         let configuration = Process.Spawn.Configuration(
-            executable: swiftExecutable,
-            arguments: swiftExecutable == "/usr/bin/env"
+            executable: executableString,
+            arguments: executableString == "/usr/bin/env"
                 ? ["swift", "package", "dump-package"]
                 : ["package", "dump-package"],
             stdout: .pipe,
             stderr: .pipe,
-            workingDirectory: packageDirectory
+            workingDirectory: packageDirectory.string
         )
 
         let output: Process.Output
@@ -201,7 +188,7 @@ extension Package.Workspace {
         } catch {
             throw .init(
                 kind: .subprocessError,
-                detail: "spawn failed for '\(packageDirectory)': \(error)"
+                detail: "spawn failed for '\(packageDirectory.string)': \(error)"
             )
         }
 
@@ -211,38 +198,35 @@ extension Package.Workspace {
             } ?? ""
             throw .init(
                 kind: .manifestLoadFailed,
-                detail: "'\(packageDirectory)' exited with non-zero status: \(output.status). stderr: \(stderrSummary)"
+                detail: "'\(packageDirectory.string)' exited with non-zero status: \(output.status). stderr: \(stderrSummary)"
             )
         }
 
         guard let stdoutBytes = output.stdout else {
             throw .init(
                 kind: .manifestLoadFailed,
-                detail: "'\(packageDirectory)' produced no stdout (pipe was not captured)"
+                detail: "'\(packageDirectory.string)' produced no stdout (pipe was not captured)"
             )
         }
 
         // swiftlint:disable typed_throws_required
         do {
-            return try Package.Manifest._decode(jsonBytes: stdoutBytes)
+            return try Package.Manifest.decode(jsonBytes: stdoutBytes)
         } catch {
             throw .init(
                 kind: .invalidManifestJSON,
-                detail: "'\(packageDirectory)' JSON decode failed: \(error)"
+                detail: "'\(packageDirectory.string)' JSON decode failed: \(error)"
             )
         }
         // swiftlint:enable typed_throws_required
     }
 
-    /// Load manifests in parallel with a concurrency bound.
-    ///
-    /// Splits `packageDirectories` into chunks of `concurrencyBound`
-    /// each; runs every chunk in a `TaskGroup`; concatenates the
-    /// chunk results to preserve filesystem-walk ordering.
-    @usableFromInline
-    internal static func _loadManifestsConcurrently(
-        packageDirectories: [Swift.String],
-        swiftExecutable: Swift.String,
+    /// Load manifests in parallel with a concurrency bound, in
+    /// chunks of `concurrencyBound`. Per-chunk results are sorted
+    /// back into filesystem-walk order before concatenation.
+    private static func loadManifests(
+        packageDirectories: [Paths.Path],
+        swiftExecutable: Paths.Path,
         concurrencyBound: Swift.Int
     ) async throws -> [Package.Manifest] {
         var results: [Package.Manifest] = []
@@ -250,9 +234,7 @@ extension Package.Workspace {
         while index < packageDirectories.count {
             let upperIndex = Swift.min(index + concurrencyBound, packageDirectories.count)
             let chunk = Swift.Array(packageDirectories[index..<upperIndex])
-            let chunkResults = try await _loadChunk(
-                chunk, swiftExecutable: swiftExecutable
-            )
+            let chunkResults = try await loadChunk(chunk, swiftExecutable: swiftExecutable)
             results.append(contentsOf: chunkResults)
             index = upperIndex
         }
@@ -261,9 +243,8 @@ extension Package.Workspace {
 
     /// Spawn `swift package dump-package` for every directory in
     /// `chunk` concurrently; collect manifests in input order.
-    @usableFromInline
-    internal static func _loadChunk(
-        _ chunk: [Swift.String], swiftExecutable: Swift.String
+    private static func loadChunk(
+        _ chunk: [Paths.Path], swiftExecutable: Paths.Path
     ) async throws -> [Package.Manifest] {
         let exec = swiftExecutable
         return try await withThrowingTaskGroup(
@@ -271,7 +252,7 @@ extension Package.Workspace {
         ) { group in
             for (offset, directory) in chunk.enumerated() {
                 group.addTask { () throws -> (Swift.Int, Package.Manifest) in
-                    let manifest = try _loadManifest(
+                    let manifest = try loadManifest(
                         packageDirectory: directory, swiftExecutable: exec
                     )
                     return (offset, manifest)

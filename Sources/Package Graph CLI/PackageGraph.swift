@@ -10,6 +10,7 @@
 // ===----------------------------------------------------------------------===//
 
 internal import Package_Graph
+internal import Paths
 
 #if canImport(Darwin)
 internal import Darwin
@@ -61,11 +62,18 @@ struct PackageGraph {
             exit(0)
         }
 
-        let root: Swift.String
+        let rootString: Swift.String
         if let parsedRoot = parseRoot(arguments) {
-            root = parsedRoot
+            rootString = parsedRoot
         } else {
-            root = unsafe currentWorkingDirectory()
+            rootString = unsafe currentWorkingDirectory()
+        }
+        let root: Paths.Path
+        do {
+            root = try Paths.Path(rootString)
+        } catch {
+            print("package-graph: invalid root path '\(rootString)': \(error)")
+            exit(2)
         }
 
         do {

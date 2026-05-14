@@ -9,6 +9,8 @@
 //
 // ===----------------------------------------------------------------------===//
 
+// `Path` is the publicly re-exported `Paths.Path` per `exports.swift`.
+
 extension Package.Workspace {
     /// Tunables for ``Package/Workspace/discover(at:configuration:)``.
     public struct Configuration: Swift.Sendable, Swift.Hashable {
@@ -29,12 +31,12 @@ extension Package.Workspace {
         /// resolves via `$PATH` (the default). Used by callers that
         /// need to pin the toolchain (e.g., a non-default Swift
         /// version, a vendored toolchain for hermetic builds).
-        public var swiftExecutable: Swift.String?
+        public var swiftExecutable: Paths.Path?
 
         public init(
             maxDepth: Swift.Int = 2,
             maxConcurrentLoads: Swift.Int = 8,
-            swiftExecutable: Swift.String? = nil
+            swiftExecutable: Paths.Path? = nil
         ) {
             self.maxDepth = maxDepth
             self.maxConcurrentLoads = maxConcurrentLoads
