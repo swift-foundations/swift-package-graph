@@ -39,7 +39,8 @@ let package = Package(
         .package(path: "../swift-process"),
         .package(path: "../swift-file-system"),
         .package(path: "../swift-paths"),
-        .package(path: "../swift-json")
+        .package(path: "../swift-json"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0")
     ],
     targets: [
         .target(
@@ -59,7 +60,8 @@ let package = Package(
         .executableTarget(
             name: "Package Graph CLI",
             dependencies: [
-                "Package Graph"
+                "Package Graph",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources/Package Graph CLI"
         ),

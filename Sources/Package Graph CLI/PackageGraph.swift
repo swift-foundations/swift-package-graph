@@ -11,6 +11,7 @@
 
 internal import Package_Graph
 internal import Paths
+internal import ArgumentParser
 
 #if canImport(Darwin)
 internal import Darwin
@@ -24,10 +25,10 @@ internal import WinSDK
 
 /// Command-line entry point for the `package-graph` executable.
 ///
-/// Hand-rolled argument parsing per the L1/L2 split research doc; no
-/// `apple/swift-argument-parser` dependency. The migration target is the
-/// future `swift-command-line-interface` L3 foundation when it lands per
-/// rewritten `[RES-018]` case (c) — see HANDOFF Architectural Note.
+/// Argument parsing uses `apple/swift-argument-parser`, the canonical
+/// institute pattern for CLI argument parsing per swift-console research
+/// v3.0.1 (2026-04-01) — argument parsing is a deliberate non-goal for
+/// swift-console.
 ///
 /// Subcommands:
 ///
@@ -48,137 +49,57 @@ internal import WinSDK
 /// --help / -h      show usage
 /// ```
 @main
-struct PackageGraph {
-    static func main() async {
-        let arguments = Swift.Array(CommandLine.arguments.dropFirst())
+struct PackageGraph: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "package-graph",
+        abstract: "Inspect SwiftPM package dependency graphs.",
+        subcommands: [
+            List.self,
+            Topo.self,
+            Cycles.self,
+            SCC.self,
+            Dot.self,
+            DependentsOf.self,
+            DependenciesOf.self
+        ]
+    )
 
-        guard let subcommand = arguments.first else {
-            usage()
-            exit(1)
-        }
+    /// Global options shared across subcommands.
+    struct Options: ParsableArguments {
+        @Option(name: .long, help: "Workspace root (default $PWD).")
+        var root: Swift.String?
 
-        if subcommand == "--help" || subcommand == "-h" || subcommand == "help" {
-            usage()
-            exit(0)
+        func resolveRoot() throws -> Paths.Path {
+            let rootString: Swift.String
+            if let root {
+                rootString = root
+            } else {
+                rootString = unsafe currentWorkingDirectory()
+            }
+            do {
+                return try Paths.Path(rootString)
+            } catch {
+                print("package-graph: invalid root path '\(rootString)': \(error)")
+                throw ExitCode(2)
+            }
         }
+    }
 
-        let rootString: Swift.String
-        if let parsedRoot = parseRoot(arguments) {
-            rootString = parsedRoot
-        } else {
-            rootString = unsafe currentWorkingDirectory()
-        }
-        let root: Paths.Path
-        do {
-            root = try Paths.Path(rootString)
-        } catch {
-            print("package-graph: invalid root path '\(rootString)': \(error)")
-            exit(2)
-        }
-
+    /// Loads the workspace + graph, mapping errors to documented exit codes.
+    static func loadGraph(at root: Paths.Path) async throws -> Package.Graph {
         do {
             let workspace = try await Package.Workspace.discover(at: root)
-            let graph = try Package.Graph(workspace)
-
-            switch subcommand {
-            case "list":
-                for name in graph.packages.sorted() {
-                    print(name)
-                }
-            case "topo":
-                let order = try graph.topologicalOrder()
-                for name in order {
-                    print(name)
-                }
-            case "cycles":
-                let cycles = graph.cycles()
-                if cycles.isEmpty {
-                    print("(no cycles)")
-                } else {
-                    for cycle in cycles {
-                        print(cycle.nodes.map { "\($0)" }.joined(separator: " -> "))
-                    }
-                }
-            case "scc":
-                let components = graph.stronglyConnectedComponents()
-                for component in components {
-                    print(component.map { "\($0)" }.sorted().joined(separator: ", "))
-                }
-            case "dot":
-                print(graph.dot())
-            case "dependents-of":
-                guard arguments.count >= 2 else {
-                    print("package-graph: 'dependents-of' requires a <package> argument")
-                    exit(1)
-                }
-                let depth = parseDepth(arguments) ?? Swift.Int.max
-                let waves = graph.transitiveDependents(
-                    of: Package.Name(_unchecked: arguments[1]), depth: depth
-                )
-                for wave in waves {
-                    for name in wave.packages.sorted() {
-                        print("[\(wave.depth)] \(name)")
-                    }
-                }
-            case "dependencies-of":
-                guard arguments.count >= 2 else {
-                    print("package-graph: 'dependencies-of' requires a <package> argument")
-                    exit(1)
-                }
-                let dependencies = graph.transitiveDependencies(
-                    of: Package.Name(_unchecked: arguments[1])
-                )
-                for name in dependencies.sorted() {
-                    print(name)
-                }
-            default:
-                print("package-graph: unknown subcommand '\(subcommand)'")
-                usage()
-                exit(1)
-            }
+            return try Package.Graph(workspace)
         } catch let error as Package.Workspace.Error {
             print("package-graph: workspace error (\(error.kind)): \(error.detail)")
-            exit(2)
+            throw ExitCode(2)
         } catch let error as Package.Graph.Error {
             print("package-graph: graph error: \(error)")
-            exit(3)
+            throw ExitCode(3)
         } catch {
             print("package-graph: \(error)")
-            exit(4)
+            throw ExitCode(4)
         }
-    }
-
-    private static func usage() {
-        print("""
-        Usage: package-graph <subcommand> [options]
-
-        Subcommands:
-          dependents-of <package> [--depth N]    list packages depending on <package>
-          dependencies-of <package> [--depth N]  list packages <package> depends on
-          topo                                   topological order (dependencies first)
-          cycles                                 list dependency cycles
-          scc                                    strongly connected components
-          dot                                    emit GraphViz DOT
-          list                                   list discovered packages
-
-        Global options:
-          --root <path>    workspace root (default $PWD)
-          --help / -h      show this help
-        """)
-    }
-
-    private static func parseRoot(_ arguments: [Swift.String]) -> Swift.String? {
-        guard let index = arguments.firstIndex(of: "--root"),
-              arguments.indices.contains(index + 1)
-        else { return nil }
-        return arguments[index + 1]
-    }
-
-    private static func parseDepth(_ arguments: [Swift.String]) -> Swift.Int? {
-        guard let index = arguments.firstIndex(of: "--depth"),
-              arguments.indices.contains(index + 1)
-        else { return nil }
-        return Swift.Int(arguments[index + 1])
     }
 
     @unsafe
@@ -187,5 +108,154 @@ struct PackageGraph {
         let cwd = unsafe getcwd(&buffer, buffer.count)
         guard let cwdPtr = unsafe cwd else { return "." }
         return unsafe Swift.String(cString: cwdPtr)
+    }
+}
+
+extension PackageGraph {
+    struct List: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "list",
+            abstract: "List discovered packages."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            for name in graph.packages.sorted() {
+                print(name)
+            }
+        }
+    }
+
+    struct Topo: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "topo",
+            abstract: "Topological order (dependencies first)."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            do {
+                let order = try graph.topologicalOrder()
+                for name in order {
+                    print(name)
+                }
+            } catch {
+                print("package-graph: graph error: \(error)")
+                throw ExitCode(3)
+            }
+        }
+    }
+
+    struct Cycles: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "cycles",
+            abstract: "List dependency cycles."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            let cycles = graph.cycles()
+            if cycles.isEmpty {
+                print("(no cycles)")
+            } else {
+                for cycle in cycles {
+                    print(cycle.nodes.map { "\($0)" }.joined(separator: " -> "))
+                }
+            }
+        }
+    }
+
+    struct SCC: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "scc",
+            abstract: "Strongly connected components."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            let components = graph.stronglyConnectedComponents()
+            for component in components {
+                print(component.map { "\($0)" }.sorted().joined(separator: ", "))
+            }
+        }
+    }
+
+    struct Dot: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "dot",
+            abstract: "Emit GraphViz DOT."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            print(graph.dot())
+        }
+    }
+
+    struct DependentsOf: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "dependents-of",
+            abstract: "List packages depending on <package>."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        @Argument(help: "Upstream package name.")
+        var package: Swift.String
+
+        @Option(name: .long, help: "Wave depth (default .max).")
+        var depth: Swift.Int?
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            let waves = graph.transitiveDependents(
+                of: Package.Name(_unchecked: package),
+                depth: depth ?? Swift.Int.max
+            )
+            for wave in waves {
+                for name in wave.packages.sorted() {
+                    print("[\(wave.depth)] \(name)")
+                }
+            }
+        }
+    }
+
+    struct DependenciesOf: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "dependencies-of",
+            abstract: "List packages <package> depends on."
+        )
+
+        @OptionGroup var options: PackageGraph.Options
+
+        @Argument(help: "Downstream package name.")
+        var package: Swift.String
+
+        func run() async throws {
+            let root = try options.resolveRoot()
+            let graph = try await PackageGraph.loadGraph(at: root)
+            let dependencies = graph.transitiveDependencies(
+                of: Package.Name(_unchecked: package)
+            )
+            for name in dependencies.sorted() {
+                print(name)
+            }
+        }
     }
 }
