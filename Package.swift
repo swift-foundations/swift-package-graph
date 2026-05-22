@@ -40,7 +40,7 @@ let package = Package(
         .package(path: "../swift-file-system"),
         .package(path: "../swift-paths"),
         .package(path: "../swift-json"),
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0")
+        .package(path: "../swift-arguments")
     ],
     targets: [
         .target(
@@ -61,7 +61,7 @@ let package = Package(
             name: "Package Graph CLI",
             dependencies: [
                 "Package Graph",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
+                .product(name: "Command", package: "swift-arguments")
             ],
             path: "Sources/Package Graph CLI"
         ),
