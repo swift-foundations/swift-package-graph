@@ -34,13 +34,13 @@ let package = Package(
         // swift-async / swift-path-primitives / swift-time-primitives skipped
         // for v0.2 — `TaskGroup` covers concurrency, `Swift.String` covers path
         // joining, no timeouts in discover.
-        .package(path: "../../swift-primitives/swift-graph-primitives"),
-        .package(path: "../../swift-standards/swift-spm-standard"),
-        .package(path: "../swift-process"),
-        .package(path: "../swift-file-system"),
-        .package(path: "../swift-paths"),
-        .package(path: "../swift-json"),
-        .package(path: "../swift-arguments")
+        .package(url: "https://github.com/swift-primitives/swift-graph-primitives.git", branch: "main"),
+        .package(url: "https://github.com/swift-standards/swift-spm-standard.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-process.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-file-system.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-paths.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-json.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-arguments.git", branch: "main")
     ],
     targets: [
         .target(
