@@ -9,7 +9,7 @@
 //
 // ===----------------------------------------------------------------------===//
 
-internal import Graph_Primitives_Core
+internal import Graph_Primitive
 internal import Graph_SCC_Primitives
 internal import Graph_Topological_Primitives
 
@@ -37,19 +37,19 @@ extension Package {
         @usableFromInline
         internal let reverseAdjacency: [Package.Name: Swift.Set<Package.Name>]
 
-        internal let sequential: Graph_Primitives_Core.Graph.Sequential<NodeIdentity, Package.Manifest>
+        internal let sequential: Graph_Primitive.Graph.Sequential<NodeIdentity, Package.Manifest>
 
-        internal let nodeByName: [Package.Name: Graph_Primitives_Core.Graph.Node<NodeIdentity>]
+        internal let nodeByName: [Package.Name: Graph_Primitive.Graph.Node<NodeIdentity>]
 
-        internal let nameByNode: [Graph_Primitives_Core.Graph.Node<NodeIdentity>: Package.Name]
+        internal let nameByNode: [Graph_Primitive.Graph.Node<NodeIdentity>: Package.Name]
 
         public init(_ workspace: borrowing Workspace) throws(Self.Error) {
             var manifestByName: [Package.Name: Package.Manifest] = [:]
             var forwardAdjacency: [Package.Name: Swift.Set<Package.Name>] = [:]
             var reverseAdjacency: [Package.Name: Swift.Set<Package.Name>] = [:]
-            var nodeByName: [Package.Name: Graph_Primitives_Core.Graph.Node<NodeIdentity>] = [:]
-            var nameByNode: [Graph_Primitives_Core.Graph.Node<NodeIdentity>: Package.Name] = [:]
-            var builder = Graph_Primitives_Core.Graph.Sequential<NodeIdentity, Package.Manifest>.Builder()
+            var nodeByName: [Package.Name: Graph_Primitive.Graph.Node<NodeIdentity>] = [:]
+            var nameByNode: [Graph_Primitive.Graph.Node<NodeIdentity>: Package.Name] = [:]
+            var builder = Graph_Primitive.Graph.Sequential<NodeIdentity, Package.Manifest>.Builder()
 
             for manifest in workspace.manifests {
                 manifestByName[manifest.name] = manifest
@@ -169,7 +169,7 @@ extension Package.Graph {
 
 extension Package.Graph {
     /// Adjacency extract bridging ``Package/Manifest`` to the
-    /// in-workspace ``Graph_Primitives_Core/Graph/Node`` set.
+    /// in-workspace ``Graph_Primitive/Graph/Node`` set.
     ///
     /// Built on demand inside each structural query. The closure
     /// captures ``nodeByName`` by value (Swift dictionary value
@@ -177,10 +177,10 @@ extension Package.Graph {
     /// allocated node; cross-workspace dependencies (those whose
     /// target isn't in the workspace) drop out via `compactMap`.
     internal func makeAdjacencyExtract()
-        -> Graph_Primitives_Core.Graph.Adjacency.Extract<
+        -> Graph_Primitive.Graph.Adjacency.Extract<
             Package.Manifest,
             NodeIdentity,
-            [Graph_Primitives_Core.Graph.Node<NodeIdentity>]
+            [Graph_Primitive.Graph.Node<NodeIdentity>]
         >
     {
         let nodeByName = self.nodeByName

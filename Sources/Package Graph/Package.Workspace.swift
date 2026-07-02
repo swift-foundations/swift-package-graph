@@ -9,6 +9,7 @@
 //
 // ===----------------------------------------------------------------------===//
 
+internal import Byte_Primitive
 internal import File_System
 internal import Process
 
@@ -199,7 +200,7 @@ extension Package.Workspace {
         }
 
         do {
-            return try Package.Manifest.decode(jsonBytes: stdoutBytes)
+            return try Package.Manifest.decode(jsonBytes: stdoutBytes.map(Byte.init))
         } catch {
             throw .init(
                 kind: .invalidManifestJSON,

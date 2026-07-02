@@ -532,11 +532,25 @@ enum Main {
             print("package-graph: missing subcommand. Expected one of: \(available.joined(separator: ", "))")
             exit(64)
 
-        case let .unknownSubcommand(name, _):
+        case let .versionRequested(version):
+            print(version)
+            exit(0)
+
+        case let .exit(code, message):
+            if let message { print(message) }
+            exit(code)
+
+        case let .invalidEnvironmentValue(name, environment, value):
+            print(
+                "package-graph: invalid value '\(value)' for '\(name)' from environment variable '\(environment)'"
+            )
+            exit(64)
+
+        case let .unknownSubcommand(name, _, _):
             print("package-graph: unknown subcommand '\(name)'")
             exit(64)
 
-        case let .unknownLongOption(name, _):
+        case let .unknownLongOption(name, _, _):
             print("package-graph: unknown option '--\(name)'")
             exit(64)
 

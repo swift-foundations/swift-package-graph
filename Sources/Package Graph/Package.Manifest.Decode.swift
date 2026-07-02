@@ -22,6 +22,7 @@
 // surface should decode via the swift-spm-standard Codable
 // conformance using a Foundation-free encoder (out of v0.2 scope).
 
+internal import Byte_Primitive
 internal import JSON
 
 extension Package.Manifest {
@@ -32,7 +33,7 @@ extension Package.Manifest {
     ///   from a `swift package dump-package` subprocess).
     /// - Returns: The decoded manifest. v0.3 fields default if absent.
     /// - Throws: `JSON.Error` on parse failure or wire-shape mismatch.
-    internal static func decode(jsonBytes bytes: [UInt8]) throws(JSON.Error) -> Package.Manifest {
+    internal static func decode(jsonBytes bytes: [Byte]) throws(JSON.Error) -> Package.Manifest {
         let json: JSON = try JSON.parse(bytes)
         return try _decode(json: json)
     }

@@ -34,6 +34,7 @@ let package = Package(
         // swift-async / swift-path-primitives / swift-time-primitives skipped
         // for v0.2 — `TaskGroup` covers concurrency, `Swift.String` covers path
         // joining, no timeouts in discover.
+        .package(url: "https://github.com/swift-primitives/swift-byte-primitives.git", branch: "main"),
         .package(url: "https://github.com/swift-primitives/swift-graph-primitives.git", branch: "main"),
         .package(url: "https://github.com/swift-standards/swift-spm-standard.git", branch: "main"),
         .package(url: "https://github.com/swift-foundations/swift-process.git", branch: "main"),
@@ -46,7 +47,8 @@ let package = Package(
         .target(
             name: "Package Graph",
             dependencies: [
-                .product(name: "Graph Primitives Core", package: "swift-graph-primitives"),
+                .product(name: "Byte Primitive", package: "swift-byte-primitives"),
+                .product(name: "Graph Primitive", package: "swift-graph-primitives"),
                 .product(name: "Graph Topological Primitives", package: "swift-graph-primitives"),
                 .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
                 .product(name: "SPM Standard", package: "swift-spm-standard"),
