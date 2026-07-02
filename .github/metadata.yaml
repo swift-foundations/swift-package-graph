@@ -1,5 +1,5 @@
 # .github/metadata.yaml
-description: "Package-level dependency graph queries for SwiftPM workspaces."
+description: "Dependency-graph queries — dependents, transitive closures, topological order, cycles, SCCs, and GraphViz export — for local SwiftPM workspaces in Swift."
 topics:
   - foundations
   - package-graph
