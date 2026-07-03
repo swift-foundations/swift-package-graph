@@ -10,18 +10,18 @@
 // ===----------------------------------------------------------------------===//
 
 extension Package.Workspace {
-    /// Errors thrown by ``Package/Workspace/discover(at:configuration:)``.
-    public struct Error: Swift.Error, Swift.Sendable, Swift.Hashable {
-        /// The failure category.
-        public let kind: Kind
+  /// Errors thrown by ``Package/Workspace/discover(at:configuration:)``.
+  public struct Error: Swift.Error, Swift.Sendable, Swift.Hashable {
+    /// The failure category.
+    public let kind: Kind
 
-        /// Human-readable detail; not load-bearing for programmatic
-        /// dispatch. Use ``kind`` for branching.
-        public let detail: Swift.String
+    /// Human-readable detail; not load-bearing for programmatic
+    /// dispatch. Use ``kind`` for branching.
+    public let detail: Swift.String
 
-        public init(kind: Kind, detail: Swift.String = "") {
-            self.kind = kind
-            self.detail = detail
-        }
+    public init(kind: Kind, detail: Swift.String = "") {
+      self.kind = kind
+      self.detail = detail
     }
+  }
 }

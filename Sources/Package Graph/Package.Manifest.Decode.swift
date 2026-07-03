@@ -26,188 +26,192 @@ internal import Byte_Primitive
 internal import JSON
 
 extension Package.Manifest {
-    /// Decode a `Package.Manifest` from `swift package dump-package`
-    /// JSON output via swift-json's `JSON.parse` + a hand-rolled walker.
-    ///
-    /// - Parameter bytes: UTF-8 JSON bytes (typically captured stdout
-    ///   from a `swift package dump-package` subprocess).
-    /// - Returns: The decoded manifest. v0.3 fields default if absent.
-    /// - Throws: `JSON.Error` on parse failure or wire-shape mismatch.
-    internal static func decode(jsonBytes bytes: [Byte]) throws(JSON.Error) -> Package.Manifest {
-        let json: JSON = try JSON.parse(bytes)
-        return try _decode(json: json)
+  /// Decode a `Package.Manifest` from `swift package dump-package`
+  /// JSON output via swift-json's `JSON.parse` + a hand-rolled walker.
+  ///
+  /// - Parameter bytes: UTF-8 JSON bytes (typically captured stdout
+  ///   from a `swift package dump-package` subprocess).
+  /// - Returns: The decoded manifest. v0.3 fields default if absent.
+  /// - Throws: `JSON.Error` on parse failure or wire-shape mismatch.
+  internal static func decode(jsonBytes bytes: [Byte]) throws(JSON.Error) -> Package.Manifest {
+    let json: JSON = try JSON.parse(bytes)
+    return try _decode(json: json)
+  }
+
+  private static func _decode(json: JSON) throws(JSON.Error) -> Package.Manifest {
+    guard json.isObject else {
+      throw .typeMismatch(expected: "Manifest object", got: "non-object JSON value")
     }
 
-    private static func _decode(json: JSON) throws(JSON.Error) -> Package.Manifest {
-        guard json.isObject else {
-            throw .typeMismatch(expected: "Manifest object", got: "non-object JSON value")
-        }
+    let nameValue = json["name"]
+    guard nameValue.isString else { throw .missingKey("name") }
+    let name = Package.Name(_unchecked: Swift.String(nameValue))
 
-        let nameValue = json["name"]
-        guard nameValue.isString else { throw .missingKey("name") }
-        let name = Package.Name(_unchecked: Swift.String(nameValue))
-
-        let toolsValue = json["toolsVersion"]
-        let versionValue = toolsValue["_version"]
-        guard versionValue.isString else { throw .missingKey("toolsVersion._version") }
-        let versionString = Swift.String(versionValue)
-        let toolsVersion: Version.Tools
-        do {
-            toolsVersion = try Version.Tools(parsing: versionString)
-        } catch {
-            throw .typeMismatch(
-                expected: "valid swift-tools-version (e.g. \"6.3.1\")",
-                got: versionString
-            )
-        }
-
-        guard let dependenciesArray = json["dependencies"].array else {
-            throw .missingKey("dependencies")
-        }
-        var dependencies: [Package.Dependency] = []
-        dependencies.reserveCapacity(dependenciesArray.count)
-        for entry in dependenciesArray {
-            dependencies.append(try _decodeDependency(entry))
-        }
-
-        return Package.Manifest(
-            name: name,
-            toolsVersion: toolsVersion,
-            dependencies: dependencies
-        )
+    let toolsValue = json["toolsVersion"]
+    let versionValue = toolsValue["_version"]
+    guard versionValue.isString else { throw .missingKey("toolsVersion._version") }
+    let versionString = Swift.String(versionValue)
+    let toolsVersion: Version.Tools
+    do {
+      toolsVersion = try Version.Tools(parsing: versionString)
+    } catch {
+      throw .typeMismatch(
+        expected: "valid swift-tools-version (e.g. \"6.3.1\")",
+        got: versionString
+      )
     }
 
-    private static func _decodeDependency(_ json: JSON) throws(JSON.Error) -> Package.Dependency {
-        guard json.isObject else {
-            throw .typeMismatch(expected: "dependency object", got: "non-object JSON value")
-        }
+    guard let dependenciesArray = json["dependencies"].array else {
+      throw .missingKey("dependencies")
+    }
+    var dependencies: [Package.Dependency] = []
+    dependencies.reserveCapacity(dependenciesArray.count)
+    for entry in dependenciesArray {
+      dependencies.append(try _decodeDependency(entry))
+    }
 
-        if let fileSystem = json["fileSystem"].array, let record = fileSystem.first {
-            let identityValue = record["identity"]
-            guard identityValue.isString else { throw .missingKey("fileSystem.identity") }
-            let pathValue = record["path"]
-            guard pathValue.isString else { throw .missingKey("fileSystem.path") }
-            let pathString = Swift.String(pathValue)
-            let path: Paths.Path
-            do {
-                path = try Paths.Path(pathString)
-            } catch {
-                throw .typeMismatch(
-                    expected: "valid filesystem path",
-                    got: pathString
-                )
-            }
-            return Package.Dependency(
-                source: .path(path),
-                name: Package.Name(_unchecked: Swift.String(identityValue)),
-                products: []
-            )
-        }
+    return Package.Manifest(
+      name: name,
+      toolsVersion: toolsVersion,
+      dependencies: dependencies
+    )
+  }
 
-        if let sourceControl = json["sourceControl"].array, let record = sourceControl.first {
-            let identityValue = record["identity"]
-            guard identityValue.isString else { throw .missingKey("sourceControl.identity") }
-            let identity = Swift.String(identityValue)
-            let location = record["location"]
-            let remoteArray = location["remote"].array ?? []
-            let urlString: Swift.String
-            if let firstRemote = remoteArray.first {
-                let urlValue = firstRemote["urlString"]
-                guard urlValue.isString else { throw .missingKey("sourceControl.location.remote.urlString") }
-                urlString = Swift.String(urlValue)
-            } else {
-                urlString = ""
-            }
-            let url: URI
-            do {
-                url = try URI(urlString)
-            } catch {
-                throw .typeMismatch(
-                    expected: "valid URI per RFC 3986",
-                    got: urlString
-                )
-            }
-            let requirement = try _decodeRequirement(record["requirement"])
-            return Package.Dependency(
-                source: .url(url, requirement),
-                name: Package.Name(_unchecked: identity),
-                products: []
-            )
-        }
+  private static func _decodeDependency(_ json: JSON) throws(JSON.Error) -> Package.Dependency {
+    guard json.isObject else {
+      throw .typeMismatch(expected: "dependency object", got: "non-object JSON value")
+    }
 
-        if let registry = json["registry"].array, let record = registry.first {
-            let identityValue = record["identity"]
-            guard identityValue.isString else { throw .missingKey("registry.identity") }
-            let identityString = Swift.String(identityValue)
-            let parsedIdentity = try _parseIdentity(identityString)
-            let requirement = try _decodeRequirement(record["requirement"])
-            return Package.Dependency(
-                source: .registry(parsedIdentity, requirement),
-                name: Package.Name(_unchecked: identityString),
-                products: []
-            )
-        }
-
+    if let fileSystem = json["fileSystem"].array, let record = fileSystem.first {
+      let identityValue = record["identity"]
+      guard identityValue.isString else { throw .missingKey("fileSystem.identity") }
+      let pathValue = record["path"]
+      guard pathValue.isString else { throw .missingKey("fileSystem.path") }
+      let pathString = Swift.String(pathValue)
+      let path: Paths.Path
+      do {
+        path = try Paths.Path(pathString)
+      } catch {
         throw .typeMismatch(
-            expected: "fileSystem|sourceControl|registry dependency",
-            got: "object with none of those discriminator keys"
+          expected: "valid filesystem path",
+          got: pathString
         )
+      }
+      return Package.Dependency(
+        source: .path(path),
+        name: Package.Name(_unchecked: Swift.String(identityValue)),
+        products: []
+      )
     }
 
-    private static func _decodeRequirement(_ json: JSON) throws(JSON.Error) -> Package.Requirement {
-        guard json.isObject else {
-            throw .typeMismatch(expected: "requirement object", got: "non-object JSON value")
+    if let sourceControl = json["sourceControl"].array, let record = sourceControl.first {
+      let identityValue = record["identity"]
+      guard identityValue.isString else { throw .missingKey("sourceControl.identity") }
+      let identity = Swift.String(identityValue)
+      let location = record["location"]
+      let remoteArray = location["remote"].array ?? []
+      let urlString: Swift.String
+      if let firstRemote = remoteArray.first {
+        let urlValue = firstRemote["urlString"]
+        guard urlValue.isString else {
+          throw .missingKey("sourceControl.location.remote.urlString")
         }
-
-        if let exactArray = json["exact"].array, let entry = exactArray.first {
-            guard entry.isString else { throw .missingKey("exact[0]") }
-            let version = try _parseSemantic(Swift.String(entry))
-            return .exact(version)
-        }
-        if let rangeArray = json["range"].array, let entry = rangeArray.first {
-            let lowerValue = entry["lowerBound"]
-            guard lowerValue.isString else { throw .missingKey("range.lowerBound") }
-            let upperValue = entry["upperBound"]
-            guard upperValue.isString else { throw .missingKey("range.upperBound") }
-            let lower = try _parseSemantic(Swift.String(lowerValue))
-            let upper = try _parseSemantic(Swift.String(upperValue))
-            return lower..<upper
-        }
-        if let branchArray = json["branch"].array, let entry = branchArray.first {
-            guard entry.isString else { throw .missingKey("branch[0]") }
-            return .branch(Swift.String(entry))
-        }
-        if let revisionArray = json["revision"].array, let entry = revisionArray.first {
-            guard entry.isString else { throw .missingKey("revision[0]") }
-            return .revision(Swift.String(entry))
-        }
-
+        urlString = Swift.String(urlValue)
+      } else {
+        urlString = ""
+      }
+      let url: URI
+      do {
+        url = try URI(urlString)
+      } catch {
         throw .typeMismatch(
-            expected: "exact|range|branch|revision requirement",
-            got: "object with none of those discriminator keys"
+          expected: "valid URI per RFC 3986",
+          got: urlString
         )
+      }
+      let requirement = try _decodeRequirement(record["requirement"])
+      return Package.Dependency(
+        source: .url(url, requirement),
+        name: Package.Name(_unchecked: identity),
+        products: []
+      )
     }
 
-    private static func _parseSemantic(_ string: Swift.String) throws(JSON.Error) -> Version.Semantic {
-        do {
-            return try Version.Semantic(parsing: string)
-        } catch {
-            throw .typeMismatch(
-                expected: "valid SemVer (e.g. \"1.2.3\")",
-                got: string
-            )
-        }
+    if let registry = json["registry"].array, let record = registry.first {
+      let identityValue = record["identity"]
+      guard identityValue.isString else { throw .missingKey("registry.identity") }
+      let identityString = Swift.String(identityValue)
+      let parsedIdentity = try _parseIdentity(identityString)
+      let requirement = try _decodeRequirement(record["requirement"])
+      return Package.Dependency(
+        source: .registry(parsedIdentity, requirement),
+        name: Package.Name(_unchecked: identityString),
+        products: []
+      )
     }
 
-    private static func _parseIdentity(_ string: Swift.String) throws(JSON.Error) -> Package.Identity {
-        guard let dot = string.firstIndex(of: ".") else {
-            throw .typeMismatch(
-                expected: "registry identity 'scope.name' per SE-0292",
-                got: string
-            )
-        }
-        let scope = Swift.String(string[..<dot])
-        let name = Swift.String(string[string.index(after: dot)...])
-        return Package.Identity(scope: scope, name: name)
+    throw .typeMismatch(
+      expected: "fileSystem|sourceControl|registry dependency",
+      got: "object with none of those discriminator keys"
+    )
+  }
+
+  private static func _decodeRequirement(_ json: JSON) throws(JSON.Error) -> Package.Requirement {
+    guard json.isObject else {
+      throw .typeMismatch(expected: "requirement object", got: "non-object JSON value")
     }
+
+    if let exactArray = json["exact"].array, let entry = exactArray.first {
+      guard entry.isString else { throw .missingKey("exact[0]") }
+      let version = try _parseSemantic(Swift.String(entry))
+      return .exact(version)
+    }
+    if let rangeArray = json["range"].array, let entry = rangeArray.first {
+      let lowerValue = entry["lowerBound"]
+      guard lowerValue.isString else { throw .missingKey("range.lowerBound") }
+      let upperValue = entry["upperBound"]
+      guard upperValue.isString else { throw .missingKey("range.upperBound") }
+      let lower = try _parseSemantic(Swift.String(lowerValue))
+      let upper = try _parseSemantic(Swift.String(upperValue))
+      return lower..<upper
+    }
+    if let branchArray = json["branch"].array, let entry = branchArray.first {
+      guard entry.isString else { throw .missingKey("branch[0]") }
+      return .branch(Swift.String(entry))
+    }
+    if let revisionArray = json["revision"].array, let entry = revisionArray.first {
+      guard entry.isString else { throw .missingKey("revision[0]") }
+      return .revision(Swift.String(entry))
+    }
+
+    throw .typeMismatch(
+      expected: "exact|range|branch|revision requirement",
+      got: "object with none of those discriminator keys"
+    )
+  }
+
+  private static func _parseSemantic(_ string: Swift.String) throws(JSON.Error) -> Version.Semantic
+  {
+    do {
+      return try Version.Semantic(parsing: string)
+    } catch {
+      throw .typeMismatch(
+        expected: "valid SemVer (e.g. \"1.2.3\")",
+        got: string
+      )
+    }
+  }
+
+  private static func _parseIdentity(_ string: Swift.String) throws(JSON.Error) -> Package.Identity
+  {
+    guard let dot = string.firstIndex(of: ".") else {
+      throw .typeMismatch(
+        expected: "registry identity 'scope.name' per SE-0292",
+        got: string
+      )
+    }
+    let scope = Swift.String(string[..<dot])
+    let name = Swift.String(string[string.index(after: dot)...])
+    return Package.Identity(scope: scope, name: name)
+  }
 }

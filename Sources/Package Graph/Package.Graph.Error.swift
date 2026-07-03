@@ -10,14 +10,14 @@
 // ===----------------------------------------------------------------------===//
 
 extension Package.Graph {
-    /// Errors thrown by graph construction and graph queries.
-    public struct Error: Swift.Error, Swift.Sendable, Swift.Hashable {
-        public let kind: Kind
-        public let detail: Swift.String
+  /// Errors thrown by graph construction and graph queries.
+  public struct Error: Swift.Error, Swift.Sendable, Swift.Hashable {
+    public let kind: Kind
+    public let detail: Swift.String
 
-        public init(kind: Kind, detail: Swift.String = "") {
-            self.kind = kind
-            self.detail = detail
-        }
+    public init(kind: Kind, detail: Swift.String = "") {
+      self.kind = kind
+      self.detail = detail
     }
+  }
 }

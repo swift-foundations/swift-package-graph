@@ -10,15 +10,15 @@
 // ===----------------------------------------------------------------------===//
 
 extension Package.Graph.Error {
-    /// Failure categories for ``Package/Graph/Error``.
-    public enum Kind: Swift.Sendable, Swift.Hashable {
-        /// Graph construction failed (e.g., a manifest
-        /// references a dependency the workspace doesn't
-        /// contain).
-        case constructionFailed
+  /// Failure categories for ``Package/Graph/Error``.
+  public enum Kind: Swift.Sendable, Swift.Hashable {
+    /// Graph construction failed (e.g., a manifest
+    /// references a dependency the workspace doesn't
+    /// contain).
+    case constructionFailed
 
-        /// Topological order requested but the graph contains
-        /// cycles. Call ``Package/Graph/cycles()`` to enumerate them.
-        case cycleDetected
-    }
+    /// Topological order requested but the graph contains
+    /// cycles. Call ``Package/Graph/cycles()`` to enumerate them.
+    case cycleDetected
+  }
 }

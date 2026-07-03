@@ -31,5 +31,5 @@
 // public dependency surface for no consumer-visible payoff — keep it
 // internal until a real need surfaces.
 
-@_exported public import SPM_Standard
 @_exported public import Paths
+@_exported public import SPM_Standard
