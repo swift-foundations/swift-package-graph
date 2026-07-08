@@ -54,7 +54,9 @@ enum PackageGraph: Command.`Protocol`, Equatable {
   case dot(Dot)
   case dependentsOf(DependentsOf)
   case dependenciesOf(DependenciesOf)
+}
 
+extension PackageGraph {
   static var configuration: Command.Configuration {
     Command.Configuration(
       name: "package-graph",
@@ -210,7 +212,9 @@ extension PackageGraph {
 // `[a-zA-Z][a-zA-Z0-9-]*`). Per-call `try` would scatter throw-noise; build
 // once at module-load with `_unchecked` since the literals are known-good.
 
-private enum Names {
+private enum Names {}
+
+extension Names {
   static let root: Argument.Name = .long(Argument.Name.Long(_unchecked: "root"))
   static let depth: Argument.Name = .long(Argument.Name.Long(_unchecked: "depth"))
 }
@@ -224,31 +228,6 @@ extension PackageGraph {
     init(root: Swift.String = "") {
       self.root = root
     }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "list",
-        abstract: "List discovered packages."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      for name in graph.packages.sorted() {
-        print(name)
-      }
-    }
   }
 
   struct Topo: Command.`Protocol`, Equatable {
@@ -256,37 +235,6 @@ extension PackageGraph {
 
     init(root: Swift.String = "") {
       self.root = root
-    }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "topo",
-        abstract: "Topological order (dependencies first)."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      do {
-        let order = try graph.topologicalOrder()
-        for name in order {
-          print(name)
-        }
-      } catch {
-        PackageGraph.printError("package-graph: graph error: \(error)")
-        PackageGraph.platformExit(3)
-      }
     }
   }
 
@@ -296,36 +244,6 @@ extension PackageGraph {
     init(root: Swift.String = "") {
       self.root = root
     }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "cycles",
-        abstract: "List dependency cycles."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      let cycles = graph.cycles()
-      if cycles.isEmpty {
-        print("(no cycles)")
-      } else {
-        for cycle in cycles {
-          print(cycle.nodes.map { "\($0)" }.joined(separator: " -> "))
-        }
-      }
-    }
   }
 
   struct SCC: Command.`Protocol`, Equatable {
@@ -334,32 +252,6 @@ extension PackageGraph {
     init(root: Swift.String = "") {
       self.root = root
     }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "scc",
-        abstract: "Strongly connected components."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      let components = graph.stronglyConnectedComponents()
-      for component in components {
-        print(component.map { "\($0)" }.sorted().joined(separator: ", "))
-      }
-    }
   }
 
   struct Dot: Command.`Protocol`, Equatable {
@@ -367,29 +259,6 @@ extension PackageGraph {
 
     init(root: Swift.String = "") {
       self.root = root
-    }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "dot",
-        abstract: "Emit GraphViz DOT."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      print(graph.dot())
     }
   }
 
@@ -407,47 +276,6 @@ extension PackageGraph {
       self.root = root
       self.depth = depth
     }
-
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "dependents-of",
-        abstract: "List packages depending on <package>."
-      )
-    }
-
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Positional(
-          \.package,
-          name: "package",
-          help: .init(abstract: "Upstream package name.")
-        )
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-        Command.Option(
-          \.depth,
-          name: Names.depth,
-          help: .init(abstract: "Wave depth (default .max).")
-        )
-      }
-    }
-
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      let waves = graph.transitiveDependents(
-        of: Package.Name(_unchecked: package),
-        depth: depth
-      )
-      for wave in waves {
-        for name in wave.packages.sorted() {
-          print("[\(wave.depth)] \(name)")
-        }
-      }
-    }
   }
 
   struct DependenciesOf: Command.`Protocol`, Equatable {
@@ -461,38 +289,228 @@ extension PackageGraph {
       self.package = package
       self.root = root
     }
+  }
+}
 
-    static var configuration: Command.Configuration {
-      Command.Configuration(
-        name: "dependencies-of",
-        abstract: "List packages <package> depends on."
+extension PackageGraph.List {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "list",
+      abstract: "List discovered packages."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
       )
     }
+  }
 
-    static var schema: Command.Schema.Definition<Self> {
-      Command.Schema.Definition<Self> {
-        Command.Positional(
-          \.package,
-          name: "package",
-          help: .init(abstract: "Downstream package name.")
-        )
-        Command.Option(
-          \.root,
-          name: Names.root,
-          help: .init(abstract: "Workspace root (default $PWD).")
-        )
-      }
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    for name in graph.packages.sorted() {
+      print(name)
     }
+  }
+}
 
-    mutating func run() async throws(Command.Error) {
-      let rootPath = PackageGraph.resolveRoot(root)
-      let graph = await PackageGraph.loadGraph(at: rootPath)
-      let dependencies = graph.transitiveDependencies(
-        of: Package.Name(_unchecked: package)
+extension PackageGraph.Topo {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "topo",
+      abstract: "Topological order (dependencies first)."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
       )
-      for name in dependencies.sorted() {
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    do {
+      let order = try graph.topologicalOrder()
+      for name in order {
         print(name)
       }
+    } catch {
+      PackageGraph.printError("package-graph: graph error: \(error)")
+      PackageGraph.platformExit(3)
+    }
+  }
+}
+
+extension PackageGraph.Cycles {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "cycles",
+      abstract: "List dependency cycles."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
+      )
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    let cycles = graph.cycles()
+    if cycles.isEmpty {
+      print("(no cycles)")
+    } else {
+      for cycle in cycles {
+        print(cycle.nodes.map { "\($0)" }.joined(separator: " -> "))
+      }
+    }
+  }
+}
+
+extension PackageGraph.SCC {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "scc",
+      abstract: "Strongly connected components."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
+      )
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    let components = graph.stronglyConnectedComponents()
+    for component in components {
+      print(component.map { "\($0)" }.sorted().joined(separator: ", "))
+    }
+  }
+}
+
+extension PackageGraph.Dot {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "dot",
+      abstract: "Emit GraphViz DOT."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
+      )
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    print(graph.dot())
+  }
+}
+
+extension PackageGraph.DependentsOf {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "dependents-of",
+      abstract: "List packages depending on <package>."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Positional(
+        \.package,
+        name: "package",
+        help: .init(abstract: "Upstream package name.")
+      )
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
+      )
+      Command.Option(
+        \.depth,
+        name: Names.depth,
+        help: .init(abstract: "Wave depth (default .max).")
+      )
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    let waves = graph.transitiveDependents(
+      of: Package.Name(_unchecked: package),
+      depth: depth
+    )
+    for wave in waves {
+      for name in wave.packages.sorted() {
+        print("[\(wave.depth)] \(name)")
+      }
+    }
+  }
+}
+
+extension PackageGraph.DependenciesOf {
+  static var configuration: Command.Configuration {
+    Command.Configuration(
+      name: "dependencies-of",
+      abstract: "List packages <package> depends on."
+    )
+  }
+
+  static var schema: Command.Schema.Definition<Self> {
+    Command.Schema.Definition<Self> {
+      Command.Positional(
+        \.package,
+        name: "package",
+        help: .init(abstract: "Downstream package name.")
+      )
+      Command.Option(
+        \.root,
+        name: Names.root,
+        help: .init(abstract: "Workspace root (default $PWD).")
+      )
+    }
+  }
+
+  mutating func run() async throws(Command.Error) {
+    let rootPath = PackageGraph.resolveRoot(root)
+    let graph = await PackageGraph.loadGraph(at: rootPath)
+    let dependencies = graph.transitiveDependencies(
+      of: Package.Name(_unchecked: package)
+    )
+    for name in dependencies.sorted() {
+      print(name)
     }
   }
 }
@@ -500,7 +518,9 @@ extension PackageGraph {
 // MARK: - Entry point
 
 @main
-enum Main {
+enum Main {}
+
+extension Main {
   static func main() async {
     let argv = Array(CommandLine.arguments.dropFirst())
     do {

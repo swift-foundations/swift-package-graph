@@ -21,8 +21,8 @@ import Testing
 
 @testable import Package_Graph
 
-@Suite("Package.Workspace.discover")
-struct PackageWorkspaceDiscoverTests {
+@Suite
+struct `Package.Workspace.discover` {
   // MARK: minimal/ — one Package.swift, zero deps
 
   @Test("minimal workspace yields one manifest")

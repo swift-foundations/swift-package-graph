@@ -13,8 +13,8 @@ import Testing
 
 @testable import Package_Graph
 
-@Suite("Package.Graph")
-struct PackageGraphTests {
+@Suite
+struct `Package.Graph` {
   @Test("Empty workspace produces empty graph")
   func emptyWorkspace() throws {
     let workspace = Package.Workspace(root: "/tmp", manifests: [])
