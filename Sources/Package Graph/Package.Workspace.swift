@@ -11,6 +11,7 @@
 
 internal import Byte_Primitive
 internal import File_System
+internal import JSON
 internal import Process
 
 // JSON decoding is delegated to ``Package/Manifest/decode(jsonBytes:)`` in
@@ -189,7 +190,7 @@ extension Package.Workspace {
     )
 
     let output: Process.Output
-    do {
+    do throws(Process.Error) {
       output = try Process.Spawn.run(configuration)
     } catch {
       throw .init(
@@ -217,7 +218,7 @@ extension Package.Workspace {
       )
     }
 
-    do {
+    do throws(JSON.Error) {
       return try Package.Manifest.decode(jsonBytes: stdoutBytes.map(Byte.init))
     } catch {
       throw .init(

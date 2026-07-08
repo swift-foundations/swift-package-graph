@@ -52,7 +52,7 @@ extension Package.Manifest {
     guard versionValue.isString else { throw .missingKey("toolsVersion._version") }
     let versionString = Swift.String(versionValue)
     let toolsVersion: Version.Tools
-    do {
+    do throws(Version.Tools.Error) {
       toolsVersion = try Version.Tools(parsing: versionString)
     } catch {
       throw .typeMismatch(
@@ -89,7 +89,7 @@ extension Package.Manifest {
       guard pathValue.isString else { throw .missingKey("fileSystem.path") }
       let pathString = Swift.String(pathValue)
       let path: Paths.Path
-      do {
+      do throws(Paths.Path.Error) {
         path = try Paths.Path(pathString)
       } catch {
         throw .typeMismatch(
@@ -121,7 +121,7 @@ extension Package.Manifest {
         urlString = ""
       }
       let url: URI
-      do {
+      do throws(URIError) {
         url = try URI(urlString)
       } catch {
         throw .typeMismatch(
@@ -192,7 +192,7 @@ extension Package.Manifest {
 
   private static func _parseSemantic(_ string: Swift.String) throws(JSON.Error) -> Version.Semantic
   {
-    do {
+    do throws(Version.Semantic.Error) {
       return try Version.Semantic(parsing: string)
     } catch {
       throw .typeMismatch(

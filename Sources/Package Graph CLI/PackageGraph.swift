@@ -179,7 +179,7 @@ extension PackageGraph {
     } else {
       rootString = override
     }
-    do {
+    do throws(Paths.Path.Error) {
       return try Paths.Path(rootString)
     } catch {
       printError("package-graph: invalid root path '\(rootString)': \(error)")
@@ -340,7 +340,7 @@ extension PackageGraph.Topo {
   mutating func run() async throws(Command.Error) {
     let rootPath = PackageGraph.resolveRoot(root)
     let graph = await PackageGraph.loadGraph(at: rootPath)
-    do {
+    do throws(Package.Graph.Error) {
       let order = try graph.topologicalOrder()
       for name in order {
         print(name)
@@ -523,7 +523,7 @@ enum Main {}
 extension Main {
   static func main() async {
     let argv = Array(CommandLine.arguments.dropFirst())
-    do {
+    do throws(Command.Error) {
       var cmd = try Command.parse(
         PackageGraph.self,
         from: argv,
