@@ -25,8 +25,8 @@ import Testing
 struct `Package.Workspace.discover` {
   // MARK: minimal/ — one Package.swift, zero deps
 
-  @Test("minimal workspace yields one manifest")
-  func minimalWorkspace() async throws {
+  @Test
+  func `minimal workspace yields one manifest`() async throws {
     let root = try makeTempDirectory()
     defer { deleteTempDirectory(root) }
 
@@ -44,8 +44,8 @@ struct `Package.Workspace.discover` {
 
   // MARK: chain/ — A → B → C linear
 
-  @Test("chain workspace yields three manifests with correct adjacency")
-  func chainWorkspace() async throws {
+  @Test
+  func `chain workspace yields three manifests with correct adjacency`() async throws {
     let root = try makeTempDirectory()
     defer { deleteTempDirectory(root) }
 
@@ -86,8 +86,8 @@ struct `Package.Workspace.discover` {
 
   // MARK: diamond/ — A → {B, C} → D
 
-  @Test("diamond workspace yields four manifests, no cycles")
-  func diamondWorkspace() async throws {
+  @Test
+  func `diamond workspace yields four manifests, no cycles`() async throws {
     let root = try makeTempDirectory()
     defer { deleteTempDirectory(root) }
 
@@ -124,27 +124,27 @@ struct `Package.Workspace.discover` {
 
   // MARK: failure modes
 
-  @Test("nonexistent root throws .rootDoesNotExist")
-  func nonexistentRoot() async throws {
+  @Test
+  func `nonexistent root throws .rootDoesNotExist`() async throws {
     let root = try Paths.Path(
       "/tmp/this-path-does-not-exist-\(Swift.Int.random(in: 0...Swift.Int.max))")
-    do {
+    do throws(Package.Workspace.Error) {
       _ = try await Package.Workspace.discover(at: root)
       Issue.record("expected throw")
-    } catch let error as Package.Workspace.Error {
+    } catch {
       #expect(error.kind == .rootDoesNotExist)
     }
   }
 
-  @Test("empty workspace throws .noPackagesFound")
-  func emptyWorkspace() async throws {
+  @Test
+  func `empty workspace throws .noPackagesFound`() async throws {
     let root = try makeTempDirectory()
     defer { deleteTempDirectory(root) }
 
-    do {
+    do throws(Package.Workspace.Error) {
       _ = try await Package.Workspace.discover(at: root)
       Issue.record("expected throw")
-    } catch let error as Package.Workspace.Error {
+    } catch {
       #expect(error.kind == .noPackagesFound)
     }
   }

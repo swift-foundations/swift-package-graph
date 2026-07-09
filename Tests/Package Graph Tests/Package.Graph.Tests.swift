@@ -15,8 +15,8 @@ import Testing
 
 @Suite
 struct `Package.Graph` {
-  @Test("Empty workspace produces empty graph")
-  func emptyWorkspace() throws {
+  @Test
+  func `Empty workspace produces empty graph`() throws {
     let workspace = Package.Workspace(root: "/tmp", manifests: [])
     let graph = try Package.Graph(workspace)
     #expect(graph.packages.isEmpty)
@@ -24,8 +24,8 @@ struct `Package.Graph` {
     #expect(graph.directDependencies(of: "anything").isEmpty)
   }
 
-  @Test("Single package, no deps")
-  func singlePackageNoDeps() throws {
+  @Test
+  func `Single package, no deps`() throws {
     let manifest = Package.Manifest(
       name: "swift-leaf",
       toolsVersion: "6.3",
@@ -40,8 +40,8 @@ struct `Package.Graph` {
     #expect(graph.manifest(for: "swift-leaf") != nil)
   }
 
-  @Test("Linear chain A→B→C: reverse-dep queries")
-  func linearChainReverseDeps() throws {
+  @Test
+  func `Linear chain A→B→C: reverse-dep queries`() throws {
     let a = Package.Manifest(
       name: "swift-a",
       toolsVersion: "6.3",
@@ -83,8 +83,8 @@ struct `Package.Graph` {
     #expect(waves[1].packages == ["swift-a"])
   }
 
-  @Test("Diamond A→B, A→C, B→D, C→D: D's dependents collapse to wave 2")
-  func diamondTransitiveDependents() throws {
+  @Test
+  func `Diamond A→B, A→C, B→D, C→D: D's dependents collapse to wave 2`() throws {
     let a = Package.Manifest(
       name: "swift-a",
       toolsVersion: "6.3",
@@ -122,8 +122,8 @@ struct `Package.Graph` {
     #expect(waves[1].packages == ["swift-a"])
   }
 
-  @Test("Depth limit truncates wave list")
-  func depthLimitTruncatesWaves() throws {
+  @Test
+  func `Depth limit truncates wave list`() throws {
     // A→B→C→D
     let manifests: [Package.Manifest] = [
       .init(
@@ -153,8 +153,8 @@ struct `Package.Graph` {
 
   // MARK: - Structural queries (v0.2)
 
-  @Test("Empty graph: structural queries return empty results")
-  func emptyGraphStructuralQueries() throws {
+  @Test
+  func `Empty graph: structural queries return empty results`() throws {
     let workspace = Package.Workspace(root: "/tmp", manifests: [])
     let graph = try Package.Graph(workspace)
 
@@ -165,8 +165,8 @@ struct `Package.Graph` {
     #expect(graph.dot() == "digraph PackageGraph {\n}\n")
   }
 
-  @Test("Topological order: linear chain returns dependencies first")
-  func topologicalOrderLinearChain() throws {
+  @Test
+  func `Topological order: linear chain returns dependencies first`() throws {
     // swift-root depends on swift-middle, swift-middle depends on swift-leaf.
     // Expected build order: leaf → middle → root.
     let root = Package.Manifest(
@@ -190,8 +190,8 @@ struct `Package.Graph` {
     #expect(order == ["swift-leaf", "swift-middle", "swift-root"])
   }
 
-  @Test("Topological order: diamond honors dependency precedence")
-  func topologicalOrderDiamond() throws {
+  @Test
+  func `Topological order: diamond honors dependency precedence`() throws {
     // a → {b, c}, b → d, c → d. Expected: d before {b, c} before a.
     let a = Package.Manifest(
       name: "a",
@@ -228,8 +228,8 @@ struct `Package.Graph` {
     #expect(cIdx < aIdx)
   }
 
-  @Test("Topological order: cycle throws cycleDetected")
-  func topologicalOrderCycleThrows() throws {
+  @Test
+  func `Topological order: cycle throws cycleDetected`() throws {
     // a → b → a
     let a = Package.Manifest(
       name: "a",
@@ -249,7 +249,7 @@ struct `Package.Graph` {
       _ = try graph.topologicalOrder()
     }
 
-    do {
+    do throws(Package.Graph.Error) {
       _ = try graph.topologicalOrder()
       Issue.record("expected cycleDetected error")
     } catch {
@@ -257,8 +257,8 @@ struct `Package.Graph` {
     }
   }
 
-  @Test("Cycles: acyclic graph returns empty")
-  func cyclesAcyclic() throws {
+  @Test
+  func `Cycles: acyclic graph returns empty`() throws {
     let leaf = Package.Manifest(name: "leaf", toolsVersion: "6.3")
     let root = Package.Manifest(
       name: "root",
@@ -271,8 +271,8 @@ struct `Package.Graph` {
     #expect(graph.cycles().isEmpty)
   }
 
-  @Test("Cycles: two-node cycle is reported")
-  func cyclesTwoNode() throws {
+  @Test
+  func `Cycles: two-node cycle is reported`() throws {
     // a → b → a
     let a = Package.Manifest(
       name: "a",
@@ -292,8 +292,8 @@ struct `Package.Graph` {
     #expect(cycles[0].nodes == ["a", "b"])
   }
 
-  @Test("Cycles: self-loop is reported")
-  func cyclesSelfLoop() throws {
+  @Test
+  func `Cycles: self-loop is reported`() throws {
     // a → a
     let a = Package.Manifest(
       name: "a",
@@ -308,8 +308,8 @@ struct `Package.Graph` {
     #expect(cycles[0].nodes == ["a"])
   }
 
-  @Test("SCC: linear chain yields singleton components")
-  func sccLinearChain() throws {
+  @Test
+  func `SCC: linear chain yields singleton components`() throws {
     let leaf = Package.Manifest(name: "leaf", toolsVersion: "6.3")
     let middle = Package.Manifest(
       name: "middle",
@@ -333,8 +333,8 @@ struct `Package.Graph` {
     #expect(flat == ["leaf", "middle", "root"])
   }
 
-  @Test("SCC: two-cycle yields one component")
-  func sccTwoCycle() throws {
+  @Test
+  func `SCC: two-cycle yields one component`() throws {
     let a = Package.Manifest(
       name: "a",
       toolsVersion: "6.3",
@@ -353,8 +353,8 @@ struct `Package.Graph` {
     #expect(sccs[0] == ["a", "b"])
   }
 
-  @Test("DOT: linear chain emits sorted nodes and edges")
-  func dotLinearChain() throws {
+  @Test
+  func `DOT: linear chain emits sorted nodes and edges`() throws {
     let leaf = Package.Manifest(name: "swift-leaf", toolsVersion: "6.3")
     let root = Package.Manifest(
       name: "swift-root",
@@ -375,8 +375,8 @@ struct `Package.Graph` {
     #expect(graph.dot() == expected)
   }
 
-  @Test("DOT: external dependencies are omitted")
-  func dotExternalDependencyOmitted() throws {
+  @Test
+  func `DOT: external dependencies are omitted`() throws {
     // local depends on external, but external isn't in the workspace.
     let local = Package.Manifest(
       name: "local",
