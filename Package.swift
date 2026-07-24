@@ -27,35 +27,24 @@ let package = Package(
         .executable(name: "package-graph", targets: ["Package Graph CLI"])
     ],
     dependencies: [
-        // v0.2: discover pipeline uses swift-process (subprocess spawn for
-        // `swift package dump-package`), swift-file-system (workspace walk),
-        // and swift-json (Foundation-free JSON parsing via JSON.Serializable
-        // walking — replaces Foundation's JSONDecoder).
-        // swift-async / swift-path-primitives / swift-time-primitives skipped
-        // for v0.2 — `TaskGroup` covers concurrency, `Swift.String` covers path
-        // joining, no timeouts in discover.
-        .package(url: "https://github.com/swift-primitives/swift-byte-primitives.git", branch: "main"),
         .package(url: "https://github.com/swift-primitives/swift-graph-primitives.git", branch: "main"),
         .package(url: "https://github.com/swift-standards/swift-spm-standard.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-process.git", branch: "main"),
+        .package(url: "https://github.com/swift-foundations/swift-package-manager.git", branch: "main"),
         .package(url: "https://github.com/swift-foundations/swift-file-system.git", branch: "main"),
         .package(url: "https://github.com/swift-foundations/swift-paths.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-json.git", branch: "main"),
         .package(url: "https://github.com/swift-foundations/swift-arguments.git", branch: "main")
     ],
     targets: [
         .target(
             name: "Package Graph",
             dependencies: [
-                .product(name: "Byte Primitive", package: "swift-byte-primitives"),
                 .product(name: "Graph Primitive", package: "swift-graph-primitives"),
                 .product(name: "Graph Topological Primitives", package: "swift-graph-primitives"),
                 .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
                 .product(name: "SPM Standard", package: "swift-spm-standard"),
-                .product(name: "Process", package: "swift-process"),
+                .product(name: "Package Manager", package: "swift-package-manager"),
                 .product(name: "File System", package: "swift-file-system"),
                 .product(name: "Paths", package: "swift-paths"),
-                .product(name: "JSON", package: "swift-json")
             ],
             path: "Sources/Package Graph"
         ),

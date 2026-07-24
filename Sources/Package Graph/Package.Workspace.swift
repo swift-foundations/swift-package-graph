@@ -9,14 +9,8 @@
 //
 // ===----------------------------------------------------------------------===//
 
-internal import Byte_Primitive
 internal import File_System
-internal import JSON
-internal import Process
-
-// JSON decoding is delegated to ``Package/Manifest/decode(jsonBytes:)`` in
-// `Package.Manifest.Decode.swift` — that file walks swift-json's typed
-// `JSON` DOM directly (Foundation-free; no `JSONDecoder`).
+private import Package_Manager
 
 extension Package {
   /// A discovered SwiftPM workspace — a directory root plus the
@@ -162,7 +156,7 @@ extension Package.Workspace {
   }
 }
 
-// MARK: - Subprocess + decode (private)
+// MARK: - SwiftPM operations (private)
 
 extension Package.Workspace {
   /// Default `swift` executable resolution — `/usr/bin/env` so the
@@ -178,53 +172,23 @@ extension Package.Workspace {
     packageDirectory: Paths.Path,
     swiftExecutable: Paths.Path
   ) throws(Self.Error) -> Package.Manifest {
-    let executableString = swiftExecutable.string
-    let configuration = Process.Spawn.Configuration(
-      executable: executableString,
-      arguments: executableString == "/usr/bin/env"
-        ? ["swift", "package", "dump-package"]
-        : ["package", "dump-package"],
-      stdout: .pipe,
-      stderr: .pipe,
-      workingDirectory: packageDirectory.string
-    )
-
-    let output: Process.Output
-    do throws(Process.Error) {
-      output = try Process.Spawn.run(configuration)
+    do throws(Package.Manager.Error) {
+      return try Package.Manager(executable: swiftExecutable.string)
+        .manifest(at: packageDirectory.string)
     } catch {
-      throw .init(
-        kind: .subprocessError,
-        detail: "spawn failed for '\(packageDirectory.string)': \(error)"
-      )
-    }
-
-    guard case .exited(let code) = output.status, code == 0 else {
-      let stderrSummary =
-        output.stderr.map {
-          Swift.String(decoding: $0, as: Unicode.UTF8.self)
-        } ?? ""
-      throw .init(
-        kind: .manifestLoadFailed,
-        detail:
-          "'\(packageDirectory.string)' exited with non-zero status: \(output.status). stderr: \(stderrSummary)"
-      )
-    }
-
-    guard let stdoutBytes = output.stdout else {
-      throw .init(
-        kind: .manifestLoadFailed,
-        detail: "'\(packageDirectory.string)' produced no stdout (pipe was not captured)"
-      )
-    }
-
-    do throws(JSON.Error) {
-      return try Package.Manifest.decode(jsonBytes: stdoutBytes.map(Byte.init))
-    } catch {
-      throw .init(
-        kind: .invalidManifestJSON,
-        detail: "'\(packageDirectory.string)' JSON decode failed: \(error)"
-      )
+      switch error {
+      case .execution:
+        throw .init(kind: .subprocessError, detail: packageDirectory.string)
+      case let .command(termination, stderr):
+        throw .init(
+          kind: .manifestLoadFailed,
+          detail: "'\(packageDirectory.string)' \(termination): \(Swift.String(decoding: stderr, as: UTF8.self))"
+        )
+      case .output:
+        throw .init(kind: .manifestLoadFailed, detail: packageDirectory.string)
+      case .manifest:
+        throw .init(kind: .invalidManifestJSON, detail: packageDirectory.string)
+      }
     }
   }
 

@@ -31,7 +31,5 @@ extension Package.Workspace.Error {
     /// not found, permission denied, signal received).
     case subprocessError
 
-    /// Scaffolded API surface; no production impl yet.
-    case notImplemented
   }
 }
