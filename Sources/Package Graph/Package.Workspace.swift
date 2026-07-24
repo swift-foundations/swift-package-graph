@@ -179,10 +179,11 @@ extension Package.Workspace {
       switch error {
       case .execution:
         throw .init(kind: .subprocessError, detail: packageDirectory.string)
-      case let .command(termination, stderr):
+      case .command(let termination, let stderr):
+        let message = Swift.String(decoding: stderr, as: UTF8.self)
         throw .init(
           kind: .manifestLoadFailed,
-          detail: "'\(packageDirectory.string)' \(termination): \(Swift.String(decoding: stderr, as: UTF8.self))"
+          detail: "'\(packageDirectory.string)' \(termination): \(message)"
         )
       case .output:
         throw .init(kind: .manifestLoadFailed, detail: packageDirectory.string)
