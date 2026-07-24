@@ -189,6 +189,16 @@ extension Package.Workspace {
         throw .init(kind: .manifestLoadFailed, detail: packageDirectory.string)
       case .manifest:
         throw .init(kind: .invalidManifestJSON, detail: packageDirectory.string)
+      case .state:
+        // Unreachable on this path: `manifest(at:)` evaluates a manifest and
+        // never reads SwiftPM's resolved state, which is the only source of
+        // this error. Handled rather than defaulted so that the compiler keeps
+        // reporting this switch when `Package.Manager.Error` grows again —
+        // an `@unknown default` here would silently absorb the next case.
+        throw .init(
+          kind: .manifestLoadFailed,
+          detail: "'\(packageDirectory.string)' unexpected resolved-state error"
+        )
       }
     }
   }
