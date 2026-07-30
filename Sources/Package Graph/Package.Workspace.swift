@@ -179,16 +179,20 @@ extension Package.Workspace {
       switch error {
       case .execution:
         throw .init(kind: .subprocessError, detail: packageDirectory.string)
+
       case .command(let termination, let stderr):
         let message = Swift.String(decoding: stderr, as: UTF8.self)
         throw .init(
           kind: .manifestLoadFailed,
           detail: "'\(packageDirectory.string)' \(termination): \(message)"
         )
+
       case .output:
         throw .init(kind: .manifestLoadFailed, detail: packageDirectory.string)
+
       case .manifest:
         throw .init(kind: .invalidManifestJSON, detail: packageDirectory.string)
+
       case .state:
         // Unreachable on this path: `manifest(at:)` evaluates a manifest and
         // never reads SwiftPM's resolved state, which is the only source of
@@ -199,6 +203,7 @@ extension Package.Workspace {
           kind: .manifestLoadFailed,
           detail: "'\(packageDirectory.string)' unexpected resolved-state error"
         )
+
       case .locked:
         // Unreachable on this path: `manifest(at:)` evaluates a manifest and never takes the
         // workspace lock, which only the edit/unedit mutation path does. Handled rather than
@@ -207,6 +212,7 @@ extension Package.Workspace {
           kind: .manifestLoadFailed,
           detail: "'\(packageDirectory.string)' unexpected workspace-lock error"
         )
+
       case .timedOut:
         // Unreachable on this path: no operation reached from here runs under a deadline.
         throw .init(
