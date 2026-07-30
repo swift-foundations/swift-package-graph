@@ -199,6 +199,20 @@ extension Package.Workspace {
           kind: .manifestLoadFailed,
           detail: "'\(packageDirectory.string)' unexpected resolved-state error"
         )
+      case .locked:
+        // Unreachable on this path: `manifest(at:)` evaluates a manifest and never takes the
+        // workspace lock, which only the edit/unedit mutation path does. Handled rather than
+        // defaulted for the reason given under `.state`.
+        throw .init(
+          kind: .manifestLoadFailed,
+          detail: "'\(packageDirectory.string)' unexpected workspace-lock error"
+        )
+      case .timedOut:
+        // Unreachable on this path: no operation reached from here runs under a deadline.
+        throw .init(
+          kind: .manifestLoadFailed,
+          detail: "'\(packageDirectory.string)' unexpected deadline error"
+        )
       }
     }
   }
