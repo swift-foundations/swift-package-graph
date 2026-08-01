@@ -23,6 +23,12 @@ import Testing
 
 @Suite
 struct `Package.Workspace.discover` {
+  @Suite struct Unit {}
+  @Suite struct `Edge Case` {}
+  @Suite struct Integration {}
+}
+
+extension `Package.Workspace.discover`.Integration {
   // MARK: minimal/ — one Package.swift, zero deps
 
   @Test

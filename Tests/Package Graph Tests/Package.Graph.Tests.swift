@@ -15,6 +15,12 @@ import Testing
 
 @Suite
 struct `Package.Graph` {
+  @Suite struct Unit {}
+  @Suite struct `Edge Case` {}
+  @Suite struct Integration {}
+}
+
+extension `Package.Graph`.Unit {
   @Test
   func `Empty workspace produces empty graph`() throws {
     let workspace = Package.Workspace(root: "/tmp", manifests: [])
