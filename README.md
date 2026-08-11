@@ -40,7 +40,7 @@ L3 Foundation. Depends on:
 - L2: `swift-spm-standard` (SwiftPM `Package.Manifest` + `Package.Dependency` types).
 - L3: `swift-process` (spawn `swift package dump-package`), `swift-file-system` (walk workspace), `swift-json` (decode manifest output), `swift-async` (concurrent loading), `swift-console` (CLI output).
 
-See `Research/design.md` for the full design rationale and the parent research doc `swift-institute/Research/downstream-impact-ci-for-swiftpm-ecosystems.md` for the use case context.
+See the [full design rationale](https://github.com/swift-institute/Research/blob/main/Packages/swift-package-graph/design.md) and the parent research doc [downstream-impact-ci-for-swiftpm-ecosystems.md](https://github.com/swift-institute/Research/blob/main/downstream-impact-ci-for-swiftpm-ecosystems.md) for the use case context.
 
 ## Related packages
 
