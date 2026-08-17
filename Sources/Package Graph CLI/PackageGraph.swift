@@ -190,7 +190,9 @@ extension PackageGraph {
     @unsafe
     fileprivate static func currentWorkingDirectory() -> Swift.String {
         var buffer = [CChar](repeating: 0, count: 4096)
-        let cwd = unsafe getcwd(&buffer, buffer.count)
+        // The buffer size is `size_t` on POSIX and `int` on the Windows CRT,
+        // so the count is converted rather than passed at its Swift width.
+        let cwd = unsafe getcwd(&buffer, numericCast(buffer.count))
         guard let cwdPtr = unsafe cwd else { return "." }
         return unsafe Swift.String(cString: cwdPtr)
     }
