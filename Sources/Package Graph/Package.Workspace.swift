@@ -79,12 +79,14 @@ extension Package.Workspace {
             )
         }
 
-        let swiftExecutable = configuration.swiftExecutable ?? defaultSwiftExecutable()
+        let manager = configuration.swiftExecutable
+            .map { Package.Manager(executable: $0.string) }
+            ?? Package.Manager()
         let concurrencyBound = Swift.max(1, configuration.maxConcurrentLoads)
 
         let manifests = try await loadManifests(
             packageDirectories: packageDirectories,
-            swiftExecutable: swiftExecutable,
+            manager: manager,
             concurrencyBound: concurrencyBound
         )
 
@@ -162,22 +164,20 @@ extension Package.Workspace {
 // MARK: - SwiftPM operations (private)
 
 extension Package.Workspace {
-    /// Default `swift` executable resolution — `/usr/bin/env` so the
-    /// child does the `$PATH` lookup. Callers needing a pinned
-    /// toolchain set ``Configuration/swiftExecutable``.
-    private static func defaultSwiftExecutable() -> Paths.Path {
-        "/usr/bin/env"
-    }
-
     /// Spawn `swift package dump-package` in `packageDirectory`,
     /// capture stdout, decode as `Package.Manifest`.
+    ///
+    /// `Package.Manager` owns launcher resolution: when no explicit
+    /// executable is configured its default spawns the launcher the
+    /// host platform actually ships, which is not the same file on
+    /// every platform. Duplicating that resolution here would let the
+    /// two drift.
     private static func loadManifest(
         packageDirectory: Paths.Path,
-        swiftExecutable: Paths.Path
+        manager: Package.Manager
     ) throws(Self.Error) -> Package.Manifest {
         do throws(Package.Manager.Error) {
-            return try Package.Manager(executable: swiftExecutable.string)
-                .manifest(at: packageDirectory.string)
+            return try manager.manifest(at: packageDirectory.string)
         } catch {
             switch error {
             case .execution:
@@ -231,7 +231,7 @@ extension Package.Workspace {
     /// back into filesystem-walk order before concatenation.
     private static func loadManifests(
         packageDirectories: [Paths.Path],
-        swiftExecutable: Paths.Path,
+        manager: Package.Manager,
         concurrencyBound: Swift.Int
     ) async throws(Self.Error) -> [Package.Manifest] {
         var results: [Package.Manifest] = []
@@ -239,7 +239,7 @@ extension Package.Workspace {
         while index < packageDirectories.count {
             let upperIndex = Swift.min(index + concurrencyBound, packageDirectories.count)
             let chunk = Swift.Array(packageDirectories[index..<upperIndex])
-            let chunkResults = try await loadChunk(chunk, swiftExecutable: swiftExecutable)
+            let chunkResults = try await loadChunk(chunk, manager: manager)
             results.append(contentsOf: chunkResults)
             index = upperIndex
         }
@@ -256,9 +256,8 @@ extension Package.Workspace {
     /// public-facing signature remains typed.
     private static func loadChunk(
         _ chunk: [Paths.Path],
-        swiftExecutable: Paths.Path
+        manager: Package.Manager
     ) async throws(Self.Error) -> [Package.Manifest] {
-        let exec = swiftExecutable
         do {
             return try await withThrowingTaskGroup(
                 of: (Swift.Int, Package.Manifest).self
@@ -267,7 +266,7 @@ extension Package.Workspace {
                     group.addTask {
                         let manifest = try loadManifest(
                             packageDirectory: directory,
-                            swiftExecutable: exec
+                            manager: manager
                         )
                         return (offset, manifest)
                     }
