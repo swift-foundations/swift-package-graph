@@ -79,7 +79,8 @@ extension Package.Workspace {
             )
         }
 
-        let manager = configuration.swiftExecutable
+        let manager =
+            configuration.swiftExecutable
             .map { Package.Manager(executable: $0.string) }
             ?? Package.Manager()
         let concurrencyBound = Swift.max(1, configuration.maxConcurrentLoads)
