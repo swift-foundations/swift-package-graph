@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3.3
+// swift-tools-version: 6.4
 
 // ===----------------------------------------------------------------------===//
 //
@@ -16,23 +16,29 @@ import PackageDescription
 let package = Package(
     name: "swift-package-graph",
     platforms: [
-        .macOS("27"),
-        .iOS("27"),
-        .tvOS("27"),
-        .watchOS("27"),
-        .visionOS("27")
+        .macOS(.v27),
+        .iOS(.v27),
+        .tvOS(.v27),
+        .watchOS(.v27),
+        .visionOS(.v27),
     ],
     products: [
         .library(name: "Package Graph", targets: ["Package Graph"]),
-        .executable(name: "package-graph", targets: ["Package Graph CLI"])
+        .executable(name: "package-graph", targets: ["Package Graph CLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swift-primitives/swift-graph-primitives.git", branch: "main"),
+        .package(
+            url: "https://github.com/swift-primitives/swift-graph-primitives.git",
+            branch: "main"
+        ),
         .package(url: "https://github.com/swift-standards/swift-spm-standard.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-package-manager.git", branch: "main"),
+        .package(
+            url: "https://github.com/swift-foundations/swift-package-manager.git",
+            branch: "main"
+        ),
         .package(url: "https://github.com/swift-foundations/swift-file-system.git", branch: "main"),
         .package(url: "https://github.com/swift-foundations/swift-paths.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-arguments.git", branch: "main")
+        .package(url: "https://github.com/swift-foundations/swift-arguments.git", branch: "main"),
     ],
     targets: [
         .target(
@@ -52,7 +58,7 @@ let package = Package(
             name: "Package Graph CLI",
             dependencies: [
                 "Package Graph",
-                .product(name: "Command", package: "swift-arguments")
+                .product(name: "Command", package: "swift-arguments"),
             ],
             path: "Sources/Package Graph CLI"
         ),
@@ -60,9 +66,9 @@ let package = Package(
             name: "Package Graph Tests",
             dependencies: [
                 "Package Graph",
-                .product(name: "File System", package: "swift-file-system")
+                .product(name: "File System", package: "swift-file-system"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )
