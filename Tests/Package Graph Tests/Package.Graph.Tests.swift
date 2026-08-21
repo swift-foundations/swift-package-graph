@@ -1,14 +1,3 @@
-// ===----------------------------------------------------------------------===//
-//
-// This source file is part of the swift-package-graph open source project
-//
-// Copyright (c) 2026 Coen ten Thije Boonkkamp and the swift-package-graph project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE for license information
-//
-// ===----------------------------------------------------------------------===//
-
 import Testing
 
 @testable import Package_Graph
@@ -75,12 +64,10 @@ extension `Package.Graph`.Unit {
         let workspace = Package.Workspace(root: "/tmp", manifests: [a, b, c])
         let graph = try Package.Graph(workspace)
 
-        // Direct dependents.
         #expect(graph.directDependents(of: "swift-c") == ["swift-b"])
         #expect(graph.directDependents(of: "swift-b") == ["swift-a"])
         #expect(graph.directDependents(of: "swift-a").isEmpty)
 
-        // Transitive dependents of swift-c — should yield two waves.
         let waves = graph.transitiveDependents(of: "swift-c", depth: .max)
         #expect(waves.count == 2)
         #expect(waves[0].depth == 1)
@@ -118,10 +105,8 @@ extension `Package.Graph`.Unit {
         let workspace = Package.Workspace(root: "/tmp", manifests: [a, b, c, d])
         let graph = try Package.Graph(workspace)
 
-        // D has 2 direct dependents (B, C).
         #expect(graph.directDependents(of: "swift-d") == ["swift-b", "swift-c"])
 
-        // Transitive waves: wave 1 = {B, C}, wave 2 = {A} (A is in only one wave).
         let waves = graph.transitiveDependents(of: "swift-d", depth: .max)
         #expect(waves.count == 2)
         #expect(waves[0].packages == ["swift-b", "swift-c"])
@@ -130,7 +115,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Depth limit truncates wave list`() throws {
-        // A→B→C→D
+
         let manifests: [Package.Manifest] = [
             .init(
                 name: "a",
@@ -163,8 +148,6 @@ extension `Package.Graph`.Unit {
         #expect(wavesAll.count == 3)
     }
 
-    // MARK: - Structural queries (v0.2)
-
     @Test
     func `Empty graph: structural queries return empty results`() throws {
         let workspace = Package.Workspace(root: "/tmp", manifests: [])
@@ -179,8 +162,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Topological order: linear chain returns dependencies first`() throws {
-        // swift-root depends on swift-middle, swift-middle depends on swift-leaf.
-        // Expected build order: leaf → middle → root.
+
         let root = Package.Manifest(
             name: "swift-root",
             toolsVersion: "6.3",
@@ -206,7 +188,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Topological order: diamond honors dependency precedence`() throws {
-        // a → {b, c}, b → d, c → d. Expected: d before {b, c} before a.
+
         let a = Package.Manifest(
             name: "a",
             toolsVersion: "6.3",
@@ -244,7 +226,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Topological order: cycle throws cycleDetected`() throws {
-        // a → b → a
+
         let a = Package.Manifest(
             name: "a",
             toolsVersion: "6.3",
@@ -287,7 +269,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Cycles: two-node cycle is reported`() throws {
-        // a → b → a
+
         let a = Package.Manifest(
             name: "a",
             toolsVersion: "6.3",
@@ -308,7 +290,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `Cycles: self-loop is reported`() throws {
-        // a → a
+
         let a = Package.Manifest(
             name: "a",
             toolsVersion: "6.3",
@@ -342,7 +324,7 @@ extension `Package.Graph`.Unit {
         let sccs = graph.stronglyConnectedComponents()
         #expect(sccs.count == 3)
         #expect(sccs.allSatisfy { $0.count == 1 })
-        // Order is reverse-topological per Tarjan; collect & sort to compare set-wise.
+
         let flat = Swift.Set(sccs.flatMap { $0 })
         #expect(flat == ["leaf", "middle", "root"])
     }
@@ -393,7 +375,7 @@ extension `Package.Graph`.Unit {
 
     @Test
     func `DOT: external dependencies are omitted`() throws {
-        // local depends on external, but external isn't in the workspace.
+
         let local = Package.Manifest(
             name: "local",
             toolsVersion: "6.3",

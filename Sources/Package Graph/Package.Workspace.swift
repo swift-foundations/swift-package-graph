@@ -1,31 +1,12 @@
-// ===----------------------------------------------------------------------===//
-//
-// This source file is part of the swift-package-graph open source project
-//
-// Copyright (c) 2026 Coen ten Thije Boonkkamp and the swift-package-graph project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE for license information
-//
-// ===----------------------------------------------------------------------===//
-
 internal import File_System
 private import Package_Manager
 
 extension Package {
-    /// A discovered SwiftPM workspace — a directory root plus the
-    /// set of `Package.Manifest` values loaded from packages found
-    /// under it.
-    ///
-    /// Construct via ``discover(at:configuration:)``, then build a
-    /// ``Package/Graph`` from it.
+
     public struct Workspace: ~Copyable, Swift.Sendable {
-        /// The on-disk root path the workspace was discovered at.
+
         public let root: Paths.Path
 
-        /// Manifests loaded from packages within the workspace.
-        /// Order is insertion-order from the filesystem walk; not
-        /// otherwise specified.
         public let manifests: [Package.Manifest]
 
         public init(root: Paths.Path, manifests: [Package.Manifest]) {
@@ -36,28 +17,7 @@ extension Package {
 }
 
 extension Package.Workspace {
-    /// Discover SwiftPM packages under `root` and load each
-    /// package's manifest.
-    ///
-    /// Walks the directory tree rooted at `root`, bounded by
-    /// ``Configuration/maxDepth``, collecting directories that
-    /// contain a `Package.swift`. For each found package, spawns
-    /// `swift package dump-package` with `workingDirectory:` set to
-    /// the package directory and `stdout: .pipe`, decodes the
-    /// captured JSON into a ``Package/Manifest``, and aggregates the
-    /// result into a ``Workspace``.
-    ///
-    /// Concurrency is bounded by
-    /// ``Configuration/maxConcurrentLoads``: the function spawns at
-    /// most that many subprocesses in flight at once.
-    ///
-    /// - Parameters:
-    ///   - root: Workspace root directory on disk.
-    ///   - configuration: Tunables (walk depth, concurrency cap,
-    ///     `swift` executable override).
-    /// - Returns: A loaded ``Workspace``.
-    /// - Throws: ``Workspace/Error`` on directory-walk failure,
-    ///   subprocess failure, or manifest-JSON decode failure.
+
     public static func discover(
         at root: Paths.Path,
         configuration: Configuration = .init()
@@ -92,10 +52,8 @@ extension Package.Workspace {
     }
 }
 
-// MARK: - Filesystem walk (private)
-
 extension Package.Workspace {
-    /// True iff `path` is a directory openable for entry listing.
+
     private static func directoryExists(at path: Paths.Path) -> Swift.Bool {
         do throws(File.Directory.Contents.Error) {
             _ = try File.Directory(path).entries()
@@ -105,18 +63,10 @@ extension Package.Workspace {
         }
     }
 
-    /// True iff `directory/Package.swift` exists as a regular file.
     private static func hasManifest(in directory: Paths.Path) -> Swift.Bool {
         File.System.Stat.isFile(at: directory / "Package.swift")
     }
 
-    /// Walk depth-bounded breadth-first, returning every directory
-    /// at depth ≤ `maxDepth` that contains a `Package.swift`.
-    ///
-    /// The root itself (depth 0) is included if it contains one.
-    /// Hidden directories (`.foo`) are skipped to avoid descending
-    /// into `.build` and similar SwiftPM artefact directories.
-    /// Discovered packages are not descended into.
     private static func findPackageDirectories(
         under root: Paths.Path,
         maxDepth: Swift.Int
@@ -159,18 +109,12 @@ extension Package.Workspace {
     }
 }
 
-// MARK: - SwiftPM operations (private)
-
 extension Package.Workspace {
-    /// Default `swift` executable resolution — `/usr/bin/env` so the
-    /// child does the `$PATH` lookup. Callers needing a pinned
-    /// toolchain set ``Configuration/swiftExecutable``.
+
     private static func defaultSwiftExecutable() -> Paths.Path {
         "/usr/bin/env"
     }
 
-    /// Spawn `swift package dump-package` in `packageDirectory`,
-    /// capture stdout, decode as `Package.Manifest`.
     private static func loadManifest(
         packageDirectory: Paths.Path,
         swiftExecutable: Paths.Path
@@ -197,27 +141,21 @@ extension Package.Workspace {
                 throw .init(kind: .invalidManifestJSON, detail: packageDirectory.string)
 
             case .state:
-                // Unreachable on this path: `manifest(at:)` evaluates a manifest and
-                // never reads SwiftPM's resolved state, which is the only source of
-                // this error. Handled rather than defaulted so that the compiler keeps
-                // reporting this switch when `Package.Manager.Error` grows again —
-                // an `@unknown default` here would silently absorb the next case.
+
                 throw .init(
                     kind: .manifestLoadFailed,
                     detail: "'\(packageDirectory.string)' unexpected resolved-state error"
                 )
 
             case .locked:
-                // Unreachable on this path: `manifest(at:)` evaluates a manifest and never takes the
-                // workspace lock, which only the edit/unedit mutation path does. Handled rather than
-                // defaulted for the reason given under `.state`.
+
                 throw .init(
                     kind: .manifestLoadFailed,
                     detail: "'\(packageDirectory.string)' unexpected workspace-lock error"
                 )
 
             case .timedOut:
-                // Unreachable on this path: no operation reached from here runs under a deadline.
+
                 throw .init(
                     kind: .manifestLoadFailed,
                     detail: "'\(packageDirectory.string)' unexpected deadline error"
@@ -226,9 +164,6 @@ extension Package.Workspace {
         }
     }
 
-    /// Load manifests in parallel with a concurrency bound, in
-    /// chunks of `concurrencyBound`. Per-chunk results are sorted
-    /// back into filesystem-walk order before concatenation.
     private static func loadManifests(
         packageDirectories: [Paths.Path],
         swiftExecutable: Paths.Path,
@@ -246,14 +181,6 @@ extension Package.Workspace {
         return results
     }
 
-    /// Spawn `swift package dump-package` for every directory in
-    /// `chunk` concurrently; collect manifests in input order.
-    ///
-    /// Swift 6.3's `withThrowingTaskGroup` does not accept a typed
-    /// `Failure` parameter — its body and iteration always throw
-    /// `any Error`. The TaskGroup is therefore the one untyped-throws
-    /// boundary in this pipeline; we bridge here so the helper's
-    /// public-facing signature remains typed.
     private static func loadChunk(
         _ chunk: [Paths.Path],
         swiftExecutable: Paths.Path

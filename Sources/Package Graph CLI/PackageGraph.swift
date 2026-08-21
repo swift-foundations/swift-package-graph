@@ -1,14 +1,3 @@
-// ===----------------------------------------------------------------------===//
-//
-// This source file is part of the swift-package-graph open source project
-//
-// Copyright (c) 2026 Coen ten Thije Boonkkamp and the swift-package-graph project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE for license information
-//
-// ===----------------------------------------------------------------------===//
-
 internal import Command
 internal import Package_Graph
 internal import Paths
@@ -23,29 +12,6 @@ internal import Paths
     internal import WinSDK
 #endif
 
-/// Command-line entry point for the `package-graph` executable.
-///
-/// Argument parsing uses `swift-arguments` (the institute's L3 argument
-/// parser) per swift-arguments v1.0.9.
-///
-/// Subcommands:
-///
-/// ```
-/// package-graph dependents-of <package> [--depth N]
-/// package-graph dependencies-of <package>
-/// package-graph topo
-/// package-graph cycles
-/// package-graph scc
-/// package-graph dot
-/// package-graph list
-/// ```
-///
-/// Global flags (per-subcommand):
-///
-/// ```
-/// --root <path>    workspace root (default $PWD)
-/// --help / -h      show usage
-/// ```
 enum PackageGraph: Command.`Protocol`, Equatable {
     case list(List)
     case topo(Topo)
@@ -146,10 +112,8 @@ extension PackageGraph {
     }
 }
 
-// MARK: - Shared helpers
-
 extension PackageGraph {
-    /// Loads the workspace + graph, mapping errors to documented exit codes.
+
     fileprivate static func loadGraph(at root: Paths.Path) async -> Package.Graph {
         do {
             let workspace = try await Package.Workspace.discover(at: root)
@@ -166,12 +130,6 @@ extension PackageGraph {
         }
     }
 
-    /// Resolves the workspace root from an override string, falling back to PWD.
-    ///
-    /// An empty `override` is treated as "not provided" — the schema-bound
-    /// default for `--root` is empty per [PRIM-FOUND] no-Optional constraint
-    /// on swift-arguments v1.0.9 `Command.Option<Root, V>` (V must conform
-    /// to `Argument.Codable` and `Optional<String>` does not).
     fileprivate static func resolveRoot(_ override: Swift.String) -> Paths.Path {
         let rootString: Swift.String
         if override.isEmpty {
@@ -190,16 +148,14 @@ extension PackageGraph {
     @unsafe
     fileprivate static func currentWorkingDirectory() -> Swift.String {
         var buffer = [CChar](repeating: 0, count: 4096)
-        // The buffer size is `size_t` on POSIX and `int` on the Windows CRT,
-        // so the count is converted rather than passed at its Swift width.
+
         let cwd = unsafe getcwd(&buffer, numericCast(buffer.count))
         guard let cwdPtr = unsafe cwd else { return "." }
         return unsafe Swift.String(cString: cwdPtr)
     }
 
     fileprivate static func printError(_ message: Swift.String) {
-        // Stderr would be preferable; the prior implementation used `print`
-        // (stdout). Preserve that behavior to keep migration additive.
+
         print(message)
     }
 
@@ -208,20 +164,12 @@ extension PackageGraph {
     }
 }
 
-// MARK: - Long-option name constants
-//
-// Production `Argument.Name.Long` factory is throwing (validates against
-// `[a-zA-Z][a-zA-Z0-9-]*`). Per-call `try` would scatter throw-noise; build
-// once at module-load with `_unchecked` since the literals are known-good.
-
 private enum Names {}
 
 extension Names {
     static let root: Argument.Name = .long(Argument.Name.Long(_unchecked: "root"))
     static let depth: Argument.Name = .long(Argument.Name.Long(_unchecked: "depth"))
 }
-
-// MARK: - Subcommands
 
 extension PackageGraph {
     struct List: Command.`Protocol`, Equatable {
@@ -517,8 +465,6 @@ extension PackageGraph.DependenciesOf {
     }
 }
 
-// MARK: - Entry point
-
 @main
 enum Main {}
 
@@ -540,7 +486,7 @@ extension Main {
     private static func handle(_ error: Command.Error) -> Never {
         switch error {
         case .helpRequested:
-            // Render top-level help.
+
             var buffer = ""
             Command.Help<PackageGraph>().serialize(PackageGraph.schema, into: &buffer)
             print(buffer)

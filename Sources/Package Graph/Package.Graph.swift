@@ -1,32 +1,9 @@
-// ===----------------------------------------------------------------------===//
-//
-// This source file is part of the swift-package-graph open source project
-//
-// Copyright (c) 2026 Coen ten Thije Boonkkamp and the swift-package-graph project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE for license information
-//
-// ===----------------------------------------------------------------------===//
-
 internal import Graph_Primitive
 internal import Graph_SCC_Primitives
 internal import Graph_Topological_Primitives
 
 extension Package {
-    /// The package-level dependency graph derived from a
-    /// ``Workspace``.
-    ///
-    /// Forward queries (``directDependencies(of:)``,
-    /// ``transitiveDependencies(of:)``) answer "what does X
-    /// depend on?". Reverse queries (``directDependents(of:)``,
-    /// ``transitiveDependents(of:depth:)``) answer "what depends
-    /// on X?" — the substrate for downstream-impact analysis.
-    ///
-    /// Structural queries (``cycles()``, ``topologicalOrder()``,
-    /// ``stronglyConnectedComponents()``, ``dot()``) compose
-    /// `swift-graph-primitives`' `Graph.Sequential` algorithms over
-    /// a node-payload of ``Package/Manifest``.
+
     public struct Graph: ~Copyable, Swift.Sendable {
         @usableFromInline
         internal let manifestByName: [Package.Name: Package.Manifest]
@@ -76,19 +53,12 @@ extension Package {
     }
 }
 
-// MARK: - Forward queries
-
 extension Package.Graph {
-    /// Returns the names of packages that `package` directly
-    /// depends on. Empty if `package` is not in the workspace
-    /// or has no declared dependencies.
+
     public func directDependencies(of package: Package.Name) -> Swift.Set<Package.Name> {
         forwardAdjacency[package] ?? []
     }
 
-    /// Returns the transitive closure of forward dependencies
-    /// from `package` — every package reachable via the
-    /// dependency edges, in any depth. Excludes `package` itself.
     public func transitiveDependencies(of package: Package.Name) -> Swift.Set<Package.Name> {
         var visited: Swift.Set<Package.Name> = []
         var frontier: Swift.Set<Package.Name> = directDependencies(of: package)
@@ -104,22 +74,12 @@ extension Package.Graph {
     }
 }
 
-// MARK: - Reverse queries
-
 extension Package.Graph {
-    /// Returns the names of packages that directly depend on
-    /// `package` — the immediate downstream consumers. The
-    /// substrate for `swift-impact`'s direct-wave matrix.
+
     public func directDependents(of package: Package.Name) -> Swift.Set<Package.Name> {
         reverseAdjacency[package] ?? []
     }
 
-    /// Returns the wave-by-wave transitive dependents of `package`,
-    /// up to (and including) wave `depth`. Wave 0 is `package`
-    /// itself; wave 1 is direct dependents; wave 2+ extends one
-    /// level per increment.
-    ///
-    /// Pass `.max` for the full transitive closure.
     public func transitiveDependents(of package: Package.Name, depth: Swift.Int = .max) -> [Wave] {
         guard depth >= 1 else { return [] }
 
@@ -129,7 +89,7 @@ extension Package.Graph {
 
         var d = 1
         while !current.isEmpty, d <= depth {
-            // Filter out already-visited (handles diamond shapes).
+
             let waveNodes = current.subtracting(visited)
             guard !waveNodes.isEmpty else { break }
             waves.append(Wave(depth: d, packages: waveNodes))
@@ -149,33 +109,19 @@ extension Package.Graph {
     }
 }
 
-// MARK: - Payload access
-
 extension Package.Graph {
-    /// Returns the loaded ``Package/Manifest`` for `package`, or
-    /// `nil` if the package isn't in this graph's workspace.
+
     public func manifest(for package: Package.Name) -> Package.Manifest? {
         manifestByName[package]
     }
 
-    /// All package names known to this graph (one entry per
-    /// workspace manifest).
     public var packages: Swift.Set<Package.Name> {
         Swift.Set(manifestByName.keys)
     }
 }
 
-// MARK: - Structural queries
-
 extension Package.Graph {
-    /// Adjacency extract bridging ``Package/Manifest`` to the
-    /// in-workspace ``Graph_Primitive/Graph/Node`` set.
-    ///
-    /// Built on demand inside each structural query. The closure
-    /// captures ``nodeByName`` by value (Swift dictionary value
-    /// semantics) and resolves each ``Package/Dependency`` to its
-    /// allocated node; cross-workspace dependencies (those whose
-    /// target isn't in the workspace) drop out via `compactMap`.
+
     internal func makeAdjacencyExtract()
         -> Graph_Primitive.Graph.Adjacency.Extract<
             Package.Manifest,
@@ -189,15 +135,6 @@ extension Package.Graph {
         }
     }
 
-    /// Detect dependency cycles in the workspace.
-    ///
-    /// Returns one ``Cycle`` per non-trivial strongly-connected
-    /// component (size ≥ 2) plus one per single-node SCC that
-    /// has a self-edge in the dependency graph. Cycle members
-    /// are emitted in lexicographic order of ``Package/Name``.
-    ///
-    /// Complexity: O(V + E) via Tarjan's SCC primitive in
-    /// `swift-graph-primitives`.
     public func cycles() -> [Cycle] {
         let groups = sequential.analyze(using: makeAdjacencyExtract()).scc()
         var result: [Cycle] = []
@@ -212,21 +149,6 @@ extension Package.Graph {
         return result.sorted { $0.nodes.lexicographicallyPrecedes($1.nodes) }
     }
 
-    /// Return packages in topological order (a package precedes
-    /// every package that depends on it). For a chain
-    /// `swift-root → swift-middle → swift-leaf` (root depends on
-    /// middle, middle depends on leaf), the returned order is
-    /// `[swift-leaf, swift-middle, swift-root]` — dependencies
-    /// first, dependents last. This is the build-order shape:
-    /// process upstream packages before the things that consume
-    /// them.
-    ///
-    /// Throws ``Graph/Error`` with kind ``Graph/Error/Kind/cycleDetected``
-    /// if the graph contains cycles. Call ``cycles()`` to enumerate
-    /// them.
-    ///
-    /// Complexity: O(V + E) via the iterative DFS-with-coloring
-    /// primitive in `swift-graph-primitives`.
     public func topologicalOrder() throws(Self.Error) -> [Package.Name] {
         let traversal = sequential.traverse.topological(using: makeAdjacencyExtract())
         guard !traversal.hasCycles else {
@@ -235,26 +157,11 @@ extension Package.Graph {
                 detail: "graph contains dependency cycles; call cycles() to enumerate"
             )
         }
-        // Underlying primitive emits "source-before-referenced-nodes" — for
-        // adjacency=dependencies that's "dependents-first". Reverse to get
-        // the dependencies-first build-order shape the doc-comment promises.
+
         let names = traversal.compactMap { nameByNode[$0.node] }
         return Swift.Array(names.reversed())
     }
 
-    /// Return strongly-connected components of the dependency
-    /// graph. Each component is a set of packages mutually
-    /// reachable via dependency edges.
-    ///
-    /// Components are returned in reverse-topological order
-    /// (sinks first) per Tarjan's algorithm; within each
-    /// component, members are emitted in lexicographic order
-    /// of ``Package/Name``.
-    ///
-    /// A graph with no cycles produces one single-node component
-    /// per package. ``cycles()`` filters to the non-trivial cases.
-    ///
-    /// Complexity: O(V + E).
     public func stronglyConnectedComponents() -> [[Package.Name]] {
         let groups = sequential.analyze(using: makeAdjacencyExtract()).scc()
         return groups.map { group in
@@ -262,14 +169,6 @@ extension Package.Graph {
         }
     }
 
-    /// Emit a GraphViz DOT representation of the workspace
-    /// dependency graph. Suitable for piping to `dot`,
-    /// Graphviz Online, or any DOT consumer.
-    ///
-    /// Nodes are emitted in ``Package/Name`` lexicographic order;
-    /// edges follow nodes, also sorted, so the output is stable
-    /// across runs. Only in-workspace nodes appear — dependencies
-    /// pointing outside the workspace are omitted.
     public func dot() -> Swift.String {
         let sortedNames = manifestByName.keys.sorted()
         var output = "digraph PackageGraph {\n"

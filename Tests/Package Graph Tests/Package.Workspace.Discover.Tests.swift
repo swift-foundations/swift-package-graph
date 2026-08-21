@@ -1,20 +1,3 @@
-// ===----------------------------------------------------------------------===//
-//
-// This source file is part of the swift-package-graph open source project
-//
-// Copyright (c) 2026 Coen ten Thije Boonkkamp and the swift-package-graph project authors
-// Licensed under Apache License v2.0
-//
-// See LICENSE for license information
-//
-// ===----------------------------------------------------------------------===//
-
-// Foundation-free test fixtures via swift-file-system + swift-paths.
-// `makeTempDirectory` constructs a unique-suffix path under `/tmp` and
-// creates it via `File.Directory.create.recursive()`. `writePackage`
-// builds a minimal SwiftPM-parseable package layout (Package.swift +
-// Sources/<name>/Placeholder.swift) via `File.write.atomic`.
-
 import File_System
 import Paths
 import Testing
@@ -29,7 +12,6 @@ struct `Package.Workspace.discover` {
 }
 
 extension `Package.Workspace.discover`.Integration {
-    // MARK: minimal/ — one Package.swift, zero deps
 
     @Test
     func `minimal workspace yields one manifest`() async throws {
@@ -47,8 +29,6 @@ extension `Package.Workspace.discover`.Integration {
         #expect(workspace.manifests[0].name == "swift-leaf")
         #expect(workspace.manifests[0].dependencies.isEmpty)
     }
-
-    // MARK: chain/ — A → B → C linear
 
     @Test
     func `chain workspace yields three manifests with correct adjacency`() async throws {
@@ -90,8 +70,6 @@ extension `Package.Workspace.discover`.Integration {
         #expect(bIndex < aIndex)
     }
 
-    // MARK: diamond/ — A → {B, C} → D
-
     @Test
     func `diamond workspace yields four manifests, no cycles`() async throws {
         let root = try makeTempDirectory()
@@ -128,8 +106,6 @@ extension `Package.Workspace.discover`.Integration {
         #expect(graph.cycles().isEmpty)
     }
 
-    // MARK: failure modes
-
     @Test
     func `nonexistent root throws .rootDoesNotExist`() async throws {
         let root = try Paths.Path(
@@ -157,8 +133,6 @@ extension `Package.Workspace.discover`.Integration {
     }
 }
 
-// MARK: - Helpers
-
 private func makeTempDirectory() throws -> Paths.Path {
     let suffix = Swift.String(Swift.Int.random(in: 0...Swift.Int.max), radix: 36)
     let path = try Paths.Path("/tmp/package-graph-tests-\(suffix)")
@@ -180,8 +154,6 @@ private func writePackage(
     let dir = File.Directory(directory)
     try dir.create.recursive()
 
-    // Sources/<name>/<name>.swift placeholder — needed for SwiftPM to
-    // accept the package layout under `swift package dump-package`.
     let sourcesDir = directory / "Sources" / Paths.Path.Component(stringLiteral: name)
     let sourcesDirHandle = File.Directory(sourcesDir)
     try sourcesDirHandle.create.recursive()
