@@ -160,6 +160,27 @@ extension Package.Workspace {
                     kind: .manifestLoadFailed,
                     detail: "'\(packageDirectory.string)' unexpected deadline error"
                 )
+
+            case .manifestUnavailable(let directory):
+
+                throw .init(
+                    kind: .manifestLoadFailed,
+                    detail: "'\(directory)' manifest unavailable"
+                )
+
+            case .manifestChanged(let directory):
+
+                throw .init(
+                    kind: .manifestLoadFailed,
+                    detail: "'\(directory)' manifest changed during evaluation"
+                )
+
+            case .toolchain:
+
+                throw .init(
+                    kind: .subprocessError,
+                    detail: "'\(packageDirectory.string)' toolchain unavailable"
+                )
             }
         }
     }
