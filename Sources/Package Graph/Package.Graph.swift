@@ -1,6 +1,6 @@
 internal import Graph_Primitive
-internal import Graph_SCC_Primitives
-internal import Graph_Topological_Primitives
+internal import Graph_SCC
+internal import Graph_Topological
 
 extension Package {
 

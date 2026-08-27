@@ -17,25 +17,25 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            url: "https://github.com/swift-primitives/swift-graph-primitives.git",
+            url: "https://github.com/swift-molecules/swift-graph.git",
             branch: "main"
         ),
         .package(url: "https://github.com/swift-standards/swift-spm-standard.git", branch: "main"),
         .package(
-            url: "https://github.com/swift-foundations/swift-package-manager.git",
+            url: "https://github.com/swift-compositions/swift-package-manager.git",
             branch: "main"
         ),
-        .package(url: "https://github.com/swift-foundations/swift-file-system.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-paths.git", branch: "main"),
-        .package(url: "https://github.com/swift-foundations/swift-arguments.git", branch: "main"),
+        .package(url: "https://github.com/swift-compositions/swift-file-system.git", branch: "main"),
+        .package(url: "https://github.com/swift-compositions/swift-paths.git", branch: "main"),
+        .package(url: "https://github.com/swift-compositions/swift-arguments.git", branch: "main"),
     ],
     targets: [
         .target(
             name: "Package Graph",
             dependencies: [
-                .product(name: "Graph Primitive", package: "swift-graph-primitives"),
-                .product(name: "Graph Topological Primitives", package: "swift-graph-primitives"),
-                .product(name: "Graph SCC Primitives", package: "swift-graph-primitives"),
+                .product(name: "Graph Primitive", package: "swift-graph"),
+                .product(name: "Graph Topological", package: "swift-graph"),
+                .product(name: "Graph SCC", package: "swift-graph"),
                 .product(name: "SPM Standard", package: "swift-spm-standard"),
                 .product(name: "Package Manager", package: "swift-package-manager"),
                 .product(name: "File System", package: "swift-file-system"),
